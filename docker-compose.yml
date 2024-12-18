@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Rust Backend Service
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      - database
+    environment:
+      - DATABASE_URL=postgresql://app_user:31stronger1you10@database:5432/mobile_app_db
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - cargo-target:/app/target
+    develop:
+      watch:
+        - action: sync
+          path: ./backend/src
+          target: /app/src
+        - action: rebuild
+          path: ./backend/Cargo.toml
+
+  # Flutter Frontend Service
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./frontend:/app
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend/lib
+          target: /app/lib
+        - action: rebuild
+          path: ./frontend/pubspec.yaml
+
+  # PostgreSQL Database Service
+  database:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=mobile_app_db
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=31stronger1you10
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+# Persistent volume definitions
+volumes:
+  postgres-data:
+  cargo-target:
