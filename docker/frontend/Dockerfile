@@ -1,36 +1,17 @@
-# Use a full Node.js image for better compatibility
-FROM node:18
-
-# Set environment variables to avoid interactive prompts
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    python3 \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Yarn globally
-RUN npm install -g yarn
+# Use a lightweight Node.js image
+FROM node:18-slim
 
 # Set the working directory
 WORKDIR /usr/src/app
 
-# Copy package.json and yarn.lock
+# Copy package.json and install dependencies
 COPY frontend/package*.json ./
+RUN npm install -g expo-cli 
 
-# Install a specific version of Expo CLI globally
-RUN yarn global add expo-cli@6.3.5
-
-# Install project dependencies
-RUN yarn install
-
-# Copy the rest of the application code
+# Copy the application code
 COPY frontend/ .
 
-# Expose Expo development ports
+# Expose Expo development port
 EXPOSE 19000 19001 19002
 
 # Start the Expo development server
