@@ -156,11 +156,3 @@ async fn get_routine_history(
 
     Ok(HttpResponse::Ok().json(history))
 }
-
-#[get("/routines/hello")]
-async fn modify_routine(
-    pool: web::Data<PgPool>,
-    request: web::Json<ModifyRoutineRequest>,
-) -> Result<HttpResponse, Error> {
-    Ok(HttpResponse::Ok())
-}
