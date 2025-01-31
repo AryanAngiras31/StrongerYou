@@ -12,6 +12,7 @@ async fn main() -> std::io::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let database_url = env::var("DATABASE_URL").expect("Failed to obtain database url");
+    print!("database url : {}\n", database_url);
     let pool = sqlx::PgPool::connect(&database_url)
         .await
         .expect("Failed to form database pool");
