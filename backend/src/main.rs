@@ -25,7 +25,14 @@ async fn main() -> std::io::Result<()> {
             name VARCHAR NOT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
-        
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to initialize tables in the database");
+
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS exercises (
             id SERIAL PRIMARY KEY,
             routine_id INTEGER REFERENCES routines(id),
@@ -33,7 +40,14 @@ async fn main() -> std::io::Result<()> {
             exercise_type VARCHAR NOT NULL,
             number_of_sets INTEGER NOT NULL
         );
-        
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to initialize tables in the database");
+
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS routine_history (
             id SERIAL PRIMARY KEY,
             routine_id INTEGER REFERENCES routines(id),
@@ -54,7 +68,7 @@ async fn main() -> std::io::Result<()> {
         //.service(routines::modify_routine)
         //.service(routines::get_routine_history)
     })
-    .bind(("port", 8080))?
+    .bind(("127.0.0.1", 8080))?
     .run()
     .await
 }
