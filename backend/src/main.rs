@@ -3,6 +3,7 @@ use dotenv::dotenv;
 use serde::{de::value::Error, Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool};
 use std::env;
+use std::fs;
 
 //mod routines;
 
@@ -18,46 +19,14 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to form database pool");
 
     //Initialize database
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS routines (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("Failed to initialize tables in the database");
+    let sql_file = "init.sql"; // Path to your SQL file
+    let sql_content = fs::read_to_string(sql_file).expect("Failed to read SQL file");
 
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS exercises (
-            id SERIAL PRIMARY KEY,
-            routine_id INTEGER REFERENCES routines(id),
-            name VARCHAR NOT NULL,
-            exercise_type VARCHAR NOT NULL,
-            number_of_sets INTEGER NOT NULL
-        );
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("Failed to initialize tables in the database");
-
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS routine_history (
-            id SERIAL PRIMARY KEY,
-            routine_id INTEGER REFERENCES routines(id),
-            completed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("Failed to initialize tables in the database");
+    // Execute the SQL commands
+    sqlx::query(&sql_content)
+        .execute(&pool)
+        .await
+        .expect("Failed to execute SQL file");
 
     // Start HTTP server
     HttpServer::new(move || {
