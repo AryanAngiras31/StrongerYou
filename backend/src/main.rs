@@ -21,6 +21,10 @@ async fn main() -> std::io::Result<()> {
     //Initialize database
     let sql_file = "init.sql"; // Path to your SQL file
     let sql_content = fs::read_to_string(sql_file).expect("Failed to read SQL file");
+    let sql_content_array: Vec<&str> = sql_content.split("\n\n").collect();
+    for statement in sql_content_array {
+        print!("\n{:?}\n", statement);
+    }
 
     // Execute the SQL commands
     sqlx::query(&sql_content)
