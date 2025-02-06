@@ -225,6 +225,7 @@ async fn main() -> std::io::Result<()> {
             .service(routines::create_routine)
             .service(routines::modify_routine)
             .service(routines::delete_routine)
+            .service(routines::test_route)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

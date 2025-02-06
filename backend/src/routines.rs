@@ -1,4 +1,5 @@
-use actix_web::{delete, post, web, HttpResponse, Responder};
+use actix_web::{delete, get, post, web, HttpResponse, Responder};
+use log::error;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -124,4 +125,9 @@ async fn delete_routine(
         Ok(res) if res.rows_affected() > 0 => HttpResponse::Ok().finish(),
         _ => HttpResponse::NotFound().finish(),
     }
+}
+
+#[get("/test")]
+async fn test_route() -> impl Responder {
+    HttpResponse::Ok().body("Route works")
 }
