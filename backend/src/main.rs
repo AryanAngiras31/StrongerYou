@@ -1,3 +1,4 @@
+use actix_web::middleware::Logger;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use serde::{de::value::Error, Deserialize, Serialize};
@@ -219,7 +220,8 @@ async fn main() -> std::io::Result<()> {
     // Start HTTP server
     HttpServer::new(move || {
         App::new()
-            .app_data(actix_web::web::Data::new(pool.clone()))
+            .wrap(Logger::default()) // Enable logging
+            .app_data(web::Data::new(pool.clone()))
             .service(routines::create_routine)
             .service(routines::modify_routine)
             .service(routines::delete_routine)
