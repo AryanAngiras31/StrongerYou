@@ -95,8 +95,8 @@ async fn modify_routine(
     sqlx::query!(
         "INSERT INTO Routines_Exercises_Sets (RoutineID, ExerciseID, NumberOfSets)
          SELECT $1, ExerciseID, NumberOfSets FROM Routines_Exercises_Sets WHERE RoutineID = $2",
-        new_routine_id,
-        copy_routine_id
+        new_routine_id as i16,
+        copy_routine_id as i16
     )
     .execute(pool.get_ref())
     .await

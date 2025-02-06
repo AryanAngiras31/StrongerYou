@@ -218,10 +218,11 @@ async fn main() -> std::io::Result<()> {
 
     // Start HTTP server
     HttpServer::new(move || {
-        App::new().app_data(actix_web::web::Data::new(pool.clone()))
-        //.service(routines::create_routine)
-        //.service(routines::modify_routine)
-        //.service(routines::get_routine_history)
+        App::new()
+            .app_data(actix_web::web::Data::new(pool.clone()))
+            .service(routines::create_routine)
+            .service(routines::modify_routine)
+            .service(routines::delete_routine)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
