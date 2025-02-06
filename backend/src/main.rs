@@ -32,6 +32,18 @@ async fn main() -> std::io::Result<()> {
 
     sqlx::query(
         r#"
+        CREATE TABLE IF NOT EXISTS Users (
+            UserID SERIAL PRIMARY KEY,
+            DateJoined DATE NOT NULL DEFAULT CURRENT_DATE
+        );    
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to create table Routines");
+
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS Routines(
             RoutineID SERIAL PRIMARY KEY,
             RoutineName VARCHAR(255) NOT NULL,
@@ -64,7 +76,7 @@ async fn main() -> std::io::Result<()> {
             WorkoutID SERIAL PRIMARY KEY,
             Start TIMESTAMP NOT NULL,
             "End" TIMESTAMP NOT NULL,
-            RoutineID SMALLINT REFERENCES Routines(RoutineID)
+            RoutineID INTEGER REFERENCES Routines(RoutineID)
         );    
         "#,
     )
@@ -104,7 +116,7 @@ async fn main() -> std::io::Result<()> {
     .expect("Failed to create table ExerciseList");
 
     sqlx::query(
-        r#"
+        r#" 
         CREATE TABLE IF NOT EXISTS Routines_Exercises_Sets (
             RoutineID SMALLINT REFERENCES Routines(RoutineID),
             ExerciseID SMALLINT REFERENCES ExerciseList(ExerciseID),
@@ -162,9 +174,41 @@ async fn main() -> std::io::Result<()> {
     sqlx::query(
         r#"
         CREATE INDEX IF NOT EXISTS idx_users_date_joined ON Users(DateJoined);
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to create indexes");
+
+    sqlx::query(
+        r#"
         CREATE INDEX IF NOT EXISTS idx_routines_user ON Routines(UserID);
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to create indexes");
+
+    sqlx::query(
+        r#"
         CREATE INDEX IF NOT EXISTS idx_workout_routine ON Workout(RoutineID);
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to create indexes");
+
+    sqlx::query(
+        r#"
         CREATE INDEX IF NOT EXISTS idx_markers_user ON Markers(UserID);
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to create indexes");
+
+    sqlx::query(
+        r#"
         CREATE INDEX IF NOT EXISTS idx_markers_date ON Markers(Date);
         "#,
     )
