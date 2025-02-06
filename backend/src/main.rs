@@ -5,7 +5,7 @@ use sqlx::{PgConnection, PgPool};
 use std::env;
 use std::fs;
 
-//mod routines;
+mod routines;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
