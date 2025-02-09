@@ -2,6 +2,7 @@ use actix_web::middleware::Logger;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use env_logger::Env;
+use log::{error, info, warn};
 use serde::{de::value::Error, Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool};
 use std::env;

@@ -91,7 +91,7 @@ async fn highest_weight_per_workout(
     .fetch_all(pool.get_ref())
     .await?;
 
-    match weights {
+    match highest_weights {
         Ok(records) => HttpResponse::Ok().json(records),
         Err(_) => HttpResponse::InternalServerError().finish(),
     }
@@ -123,13 +123,13 @@ async fn set_volume_per_workout(
 }
 
 #[get("/exercises/{exercise_id}/prs")]
-async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) -> impl Responder {
+async fn get_exercise_prs(
+    pool: web::Data<PgPool>,
+    exercise_id: web::Path<i32>,
+) -> Result<HttpResponse, actix_web::Error> {
     let prs = sqlx::query!("SELECT * FROM PRs WHERE ExerciseID = $1", exercise_id)
         .fetch_all(pool.get_ref())
-        .await?;
+        .await?; // Now works correctly
 
-    match prs {
-        Ok(records) => HttpResponse::Ok().json(records),
-        Err(_) => HttpResponse::InternalServerError().finish(),
-    }
+    Ok(HttpResponse::Ok().json(prs))
 }
