@@ -1,11 +1,13 @@
 use actix_web::middleware::Logger;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
+use env_logger::Env;
 use serde::{de::value::Error, Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool};
 use std::env;
 use std::fs;
 
+mod exercises;
 mod routines;
 
 #[actix_web::main]
@@ -63,8 +65,10 @@ async fn main() -> std::io::Result<()> {
         CREATE TABLE IF NOT EXISTS ExerciseList (
             ExerciseID SERIAL PRIMARY KEY,
             ExerciseName VARCHAR(255) NOT NULL,
-            MusclesTrained TEXT[] NOT NULL
-        );     
+            MusclesTrained TEXT[] NOT NULL,
+            ExerciseType VARCHAR(255) NOT NULL
+        );
+    
         "#,
     )
     .execute(&pool)
@@ -90,7 +94,7 @@ async fn main() -> std::io::Result<()> {
         CREATE TABLE IF NOT EXISTS PRs (
             PRID SERIAL PRIMARY KEY,
             HeaviestWeight SMALLINT NOT NULL,
-            "1RM" REAL NOT NULL,
+            OneRM REAL NOT NULL,
             SetVolume INTEGER NOT NULL,
             ExerciseID SMALLINT REFERENCES ExerciseList(ExerciseID),
             WorkoutID SMALLINT REFERENCES Workout(WorkoutID)
@@ -226,6 +230,12 @@ async fn main() -> std::io::Result<()> {
             .service(routines::modify_routine)
             .service(routines::delete_routine)
             .service(routines::test_route)
+            .service(exercises::create_exercise)
+            .service(exercises::delete_exercise)
+            .service(exercises::search_exercise)
+            .service(exercises::highest_weight_per_workout)
+            .service(exercises::set_volume_per_workout)
+            .service(exercises::get_exercise_prs)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
