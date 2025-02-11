@@ -47,6 +47,18 @@ struct ErrorResponse {
     details: Option<String>,
 }
 
+#[derive(sqlx::FromRow, Serialize)]
+struct CreatedExercise {
+    exerciseid: i32,
+    exercisename: String,
+    muscles_trained: Vec<String>,
+}
+
+#[derive(sqlx::FromRow, Serialize)]
+struct DeletedExercise {
+    exerciseid: i32,
+}
+
 // Search for exercises by name
 #[get("/exercises/{exercise_name}")]
 async fn search_exercise(
@@ -80,7 +92,7 @@ async fn search_exercise(
 // Create a new exercise
 #[post("/exercises")]
 async fn create_exercise(pool: web::Data<PgPool>, exercise: web::Json<Exercise>) -> impl Responder {
-    error!("Received exercise data: {:?}", exercise); // Log the received data
+    error!("Received exercise data: {:?}", exercise);
 
     let existing = sqlx::query!(
         "SELECT ExerciseID FROM ExerciseList WHERE ExerciseName = $1",
@@ -95,20 +107,21 @@ async fn create_exercise(pool: web::Data<PgPool>, exercise: web::Json<Exercise>)
             details: None,
         }),
         Ok(None) => {
-            let result = sqlx::query!(
+            let result = sqlx::query_as!(
+                CreatedExercise,
                 r#"
                 INSERT INTO ExerciseList (ExerciseName, MusclesTrained)
                 VALUES ($1, $2)
-                RETURNING ExerciseID, ExerciseName, MusclesTrained
+                RETURNING ExerciseID as exerciseid, ExerciseName as exercisename, MusclesTrained as muscles_trained
                 "#,
                 exercise.exercise_name,
-                &exercise.muscles_trained as &[String] // Explicit type annotation
+                &exercise.muscles_trained as &[String]
             )
             .fetch_one(pool.get_ref())
             .await;
 
             match result {
-                Ok(row) => HttpResponse::Created().json(row),
+                Ok(created_exercise) => HttpResponse::Created().json(created_exercise),
                 Err(e) => {
                     error!("Database error in create_exercise: {:?}", e);
                     HttpResponse::InternalServerError().json(ErrorResponse {
@@ -134,15 +147,20 @@ async fn delete_exercise(
     pool: web::Data<PgPool>,
     exercise_name: web::Path<String>,
 ) -> impl Responder {
-    let result = sqlx::query!(
-        "DELETE FROM ExerciseList WHERE ExerciseName = $1 RETURNING ExerciseID",
+    let result = sqlx::query_as!(
+        DeletedExercise,
+        r#"
+        DELETE FROM ExerciseList 
+        WHERE ExerciseName = $1 
+        RETURNING ExerciseID as exerciseid
+        "#,
         exercise_name.as_ref()
     )
     .fetch_optional(pool.get_ref())
     .await;
 
     match result {
-        Ok(Some(row)) => HttpResponse::Ok().json(row),
+        Ok(Some(deleted_exercise)) => HttpResponse::Ok().json(deleted_exercise),
         Ok(None) => HttpResponse::NotFound().json(ErrorResponse {
             error: "Exercise not found".to_string(),
             details: None,
