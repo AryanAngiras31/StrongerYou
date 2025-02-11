@@ -231,12 +231,7 @@ async fn main() -> std::io::Result<()> {
             .service(routines::modify_routine)
             .service(routines::delete_routine)
             .service(routines::test_route)
-            .service(exercises::create_exercise)
-            .service(exercises::delete_exercise)
-            .service(exercises::search_exercise)
-            .service(exercises::highest_weight_per_workout)
-            .service(exercises::set_volume_per_workout)
-            .service(exercises::get_exercise_prs)
+            .service(web::scope("").configure(exercises::init_routes))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
