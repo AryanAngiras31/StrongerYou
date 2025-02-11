@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use actix_web::middleware::Logger;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;

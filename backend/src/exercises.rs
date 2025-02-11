@@ -1,10 +1,11 @@
 use actix_web::{delete, get, post, web, HttpResponse, Responder};
 use chrono::{DateTime, Utc};
+use log::error;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 // Data structures for request/response handling
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Exercise {
     exercise_name: String,
     muscles_trained: Vec<String>,
@@ -32,12 +33,18 @@ struct PersonalRecord {
     set_volume: i32,
 }
 
-// Define a struct to hold the search results
 #[derive(sqlx::FromRow, Serialize)]
 struct ExerciseSearchResult {
     exerciseid: i32,
     exercisename: String,
     muscles_trained: Vec<String>,
+}
+
+// Custom error response structure
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
+    details: Option<String>,
 }
 
 // Search for exercises by name
@@ -60,13 +67,21 @@ async fn search_exercise(
 
     match exercises {
         Ok(results) => HttpResponse::Ok().json(results),
-        Err(_) => HttpResponse::InternalServerError().json("Failed to search exercises"),
+        Err(e) => {
+            error!("Database error in search_exercise: {:?}", e);
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "Failed to search exercises".to_string(),
+                details: Some(e.to_string()),
+            })
+        }
     }
 }
 
 // Create a new exercise
 #[post("/exercises")]
 async fn create_exercise(pool: web::Data<PgPool>, exercise: web::Json<Exercise>) -> impl Responder {
+    error!("Received exercise data: {:?}", exercise); // Log the received data
+
     let existing = sqlx::query!(
         "SELECT ExerciseID FROM ExerciseList WHERE ExerciseName = $1",
         exercise.exercise_name
@@ -75,26 +90,41 @@ async fn create_exercise(pool: web::Data<PgPool>, exercise: web::Json<Exercise>)
     .await;
 
     match existing {
-        Ok(Some(_)) => HttpResponse::Conflict().json("Exercise already exists"),
+        Ok(Some(_)) => HttpResponse::Conflict().json(ErrorResponse {
+            error: "Exercise already exists".to_string(),
+            details: None,
+        }),
         Ok(None) => {
             let result = sqlx::query!(
                 r#"
                 INSERT INTO ExerciseList (ExerciseName, MusclesTrained)
                 VALUES ($1, $2)
-                RETURNING ExerciseID
+                RETURNING ExerciseID, ExerciseName, MusclesTrained
                 "#,
                 exercise.exercise_name,
-                &exercise.muscles_trained
+                &exercise.muscles_trained as &[String] // Explicit type annotation
             )
             .fetch_one(pool.get_ref())
             .await;
 
             match result {
-                Ok(row) => HttpResponse::Created().json(row.exerciseid),
-                Err(_) => HttpResponse::InternalServerError().json("Failed to create exercise"),
+                Ok(row) => HttpResponse::Created().json(row),
+                Err(e) => {
+                    error!("Database error in create_exercise: {:?}", e);
+                    HttpResponse::InternalServerError().json(ErrorResponse {
+                        error: "Failed to create exercise".to_string(),
+                        details: Some(format!("Database error: {}", e)),
+                    })
+                }
             }
         }
-        Err(_) => HttpResponse::InternalServerError().json("Database error"),
+        Err(e) => {
+            error!("Database error checking existing exercise: {:?}", e);
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "Database error".to_string(),
+                details: Some(e.to_string()),
+            })
+        }
     }
 }
 
@@ -112,9 +142,18 @@ async fn delete_exercise(
     .await;
 
     match result {
-        Ok(Some(_)) => HttpResponse::Ok().json("Exercise deleted successfully"),
-        Ok(None) => HttpResponse::NotFound().json("Exercise not found"),
-        Err(_) => HttpResponse::InternalServerError().json("Failed to delete exercise"),
+        Ok(Some(row)) => HttpResponse::Ok().json(row),
+        Ok(None) => HttpResponse::NotFound().json(ErrorResponse {
+            error: "Exercise not found".to_string(),
+            details: None,
+        }),
+        Err(e) => {
+            error!("Database error in delete_exercise: {:?}", e);
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "Failed to delete exercise".to_string(),
+                details: Some(e.to_string()),
+            })
+        }
     }
 }
 
@@ -150,7 +189,13 @@ async fn get_exercise_volume(
                 .collect();
             HttpResponse::Ok().json(stats)
         }
-        Err(_) => HttpResponse::InternalServerError().json("Failed to fetch volume data"),
+        Err(e) => {
+            error!("Database error in get_exercise_volume: {:?}", e);
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "Failed to fetch volume data".to_string(),
+                details: Some(e.to_string()),
+            })
+        }
     }
 }
 
@@ -186,7 +231,13 @@ async fn get_exercise_max_weight(
                 .collect();
             HttpResponse::Ok().json(stats)
         }
-        Err(_) => HttpResponse::InternalServerError().json("Failed to fetch max weight data"),
+        Err(e) => {
+            error!("Database error in get_exercise_max_weight: {:?}", e);
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "Failed to fetch max weight data".to_string(),
+                details: Some(e.to_string()),
+            })
+        }
     }
 }
 
@@ -215,12 +266,18 @@ async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i16>) 
                     weight: row.heaviestweight,
                     one_rm: row.one_rm,
                     set_volume: row.setvolume,
-                    reps: 0, // You might want to add this to your PRs table
+                    reps: 0,
                 })
                 .collect();
             HttpResponse::Ok().json(pr_records)
         }
-        Err(_) => HttpResponse::InternalServerError().json("Failed to fetch PRs"),
+        Err(e) => {
+            error!("Database error in get_exercise_prs: {:?}", e);
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "Failed to fetch PRs".to_string(),
+                details: Some(e.to_string()),
+            })
+        }
     }
 }
 
