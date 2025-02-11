@@ -234,7 +234,7 @@ async fn main() -> std::io::Result<()> {
             .service(routines::test_route)
             .service(web::scope("").configure(exercises::init_routes))
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("127.0.0.1", port))?
     .run()
     .await
 }
