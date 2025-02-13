@@ -52,6 +52,7 @@ struct CreatedExercise {
     exerciseid: i32,
     exercisename: String,
     muscles_trained: Vec<String>,
+    exercisetype: String, // Added this field
 }
 
 #[derive(sqlx::FromRow, Serialize)]
@@ -110,12 +111,17 @@ async fn create_exercise(pool: web::Data<PgPool>, exercise: web::Json<Exercise>)
             let result = sqlx::query_as!(
                 CreatedExercise,
                 r#"
-                INSERT INTO ExerciseList (ExerciseName, MusclesTrained)
-                VALUES ($1, $2)
-                RETURNING ExerciseID as exerciseid, ExerciseName as exercisename, MusclesTrained as muscles_trained
+                INSERT INTO ExerciseList (ExerciseName, MusclesTrained, ExerciseType)
+                VALUES ($1, $2, $3)
+                RETURNING 
+                    ExerciseID as exerciseid, 
+                    ExerciseName as exercisename, 
+                    MusclesTrained as muscles_trained,
+                    ExerciseType as exercisetype
                 "#,
                 exercise.exercise_name,
-                &exercise.muscles_trained as &[String]
+                &exercise.muscles_trained as &[String],
+                exercise.exercise_type // Added exercise_type to the INSERT
             )
             .fetch_one(pool.get_ref())
             .await;

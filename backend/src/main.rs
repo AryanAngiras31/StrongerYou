@@ -180,6 +180,20 @@ async fn main() -> std::io::Result<()> {
 
     sqlx::query(
         r#"
+        CREATE TABLE IF NOT EXISTS MarkerList (
+            MarkerID SERIAL PRIMARY KEY,
+            MarkerName VARCHAR(255) NOT NULL,
+            UserID SMALLINT REFERENCES Users(UserID),
+            "Colour" VARCHAR(10) 
+        );     
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to create table ExerciseList");
+
+    sqlx::query(
+        r#"
         CREATE INDEX IF NOT EXISTS idx_users_date_joined ON Users(DateJoined);
         "#,
     )
