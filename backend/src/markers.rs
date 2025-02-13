@@ -2,7 +2,8 @@ use actix_web::{delete, get, post, put, web, HttpResponse, Responder};
 use chrono::{NaiveDate, NaiveDateTime};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::postgres::PgRow;
+use sqlx::{PgPool, Row}; // Added Row trait
 
 #[derive(Serialize, Deserialize)]
 struct MarkerCreate {
@@ -38,6 +39,23 @@ struct MarkerTimelineEntry {
     date: NaiveDate,
 }
 
+// Added response types to handle serialization
+#[derive(Serialize)]
+struct MarkerResponse {
+    marker_id: i32,
+    marker_name: String,
+    user_id: i16,
+    clr: Option<String>,
+}
+
+#[derive(Serialize)]
+struct MarkerLogResponse {
+    marker_id: i32,
+    value: f32,
+    date: NaiveDate,
+    user_id: i16,
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/markers")
@@ -55,14 +73,16 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 async fn get_marker_by_name(pool: web::Data<PgPool>, name: web::Query<String>) -> impl Responder {
     info!("Fetching marker with name: {}", name.0);
 
-    match sqlx::query!(
-        "SELECT MarkerID, MarkerName, UserID, Colour FROM MarkerList WHERE MarkerName = $1",
+    match sqlx::query_as!(
+        MarkerResponse,
+        "SELECT MarkerID as marker_id, MarkerName as marker_name, UserID as user_id, Clr as clr FROM MarkerList WHERE MarkerName = $1",
         name.0
     )
     .fetch_one(pool.get_ref())
-    .await
-    {
-        Ok(marker) => HttpResponse::Ok().json(marker),
+    .await {
+        Ok(marker) => {
+            HttpResponse::Ok().json(marker)
+        }
         Err(e) => {
             error!("Failed to fetch marker: {}", e);
             HttpResponse::NotFound().json(format!("Marker not found: {}", e))
@@ -75,16 +95,15 @@ async fn create_marker(pool: web::Data<PgPool>, marker: web::Json<MarkerCreate>)
     info!("Creating new marker: {}", marker.name);
 
     match sqlx::query!(
-        "INSERT INTO MarkerList (MarkerName, UserID, Colour) VALUES ($1, $2, $3) RETURNING MarkerID",
+        "INSERT INTO MarkerList (MarkerName, UserID, Clr) VALUES ($1, $2, $3) RETURNING MarkerID",
         marker.name,
         marker.user_id,
         marker.color
     )
     .fetch_one(pool.get_ref())
-    .await {
-        Ok(result) => {
-            HttpResponse::Created().json(result)
-        }
+    .await
+    {
+        Ok(result) => HttpResponse::Created().json(result),
         Err(e) => {
             error!("Failed to create marker: {}", e);
             HttpResponse::InternalServerError().json(format!("Failed to create marker: {}", e))
@@ -112,18 +131,21 @@ async fn modify_marker(
         if !params.is_empty() {
             query.push_str(",");
         }
-        query.push_str(" Colour = $2");
+        query.push_str(" Clr = $2");
         params.push(color.clone());
     }
 
-    query.push_str(" WHERE MarkerID = $3 RETURNING *");
+    query.push_str(" WHERE MarkerID = $3 RETURNING MarkerID, MarkerName, UserID, Clr");
 
-    match sqlx::query(&query)
-        .bind(&params[0])
-        .bind(&params.get(1).unwrap_or(&params[0]))
-        .bind(marker_id.into_inner())
-        .fetch_one(pool.get_ref())
-        .await
+    match sqlx::query_as!(
+        MarkerResponse,
+        &query,
+        params.get(0),
+        params.get(1),
+        marker_id.into_inner()
+    )
+    .fetch_one(pool.get_ref())
+    .await
     {
         Ok(result) => HttpResponse::Ok().json(result),
         Err(e) => {
@@ -160,8 +182,10 @@ async fn log_marker_value(
 ) -> impl Responder {
     info!("Logging value for marker ID: {}", marker_id);
 
-    match sqlx::query!(
-        "INSERT INTO Markers (MarkerID, Value, Date, UserID) VALUES ($1, $2, $3, $4) RETURNING *",
+    match sqlx::query_as!(
+        MarkerLogResponse,
+        "INSERT INTO Markers (MarkerID, Value, Date, UserID) VALUES ($1, $2, $3, $4) 
+         RETURNING MarkerID, Value, Date, UserID",
         marker_id.into_inner(),
         value.value,
         value.date,
@@ -206,12 +230,8 @@ async fn get_marker_analytics(
     );
 
     let query_str = match metric.to_lowercase().as_str() {
-        "sum" => {
-            "SELECT SUM(Value) as value FROM Markers WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3"
-        }
-        _ => {
-            "SELECT AVG(Value) as value FROM Markers WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3"
-        }
+        "sum" => "SELECT COALESCE(SUM(Value), 0) as value FROM Markers WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3",
+        _ => "SELECT COALESCE(AVG(Value), 0) as value FROM Markers WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3",
     };
 
     match sqlx::query(query_str)
@@ -221,12 +241,15 @@ async fn get_marker_analytics(
         .fetch_one(pool.get_ref())
         .await
     {
-        Ok(result) => HttpResponse::Ok().json(MarkerAnalytics {
-            value: result.get("value"),
-            metric_type: metric.to_string(),
-            start_date,
-            end_date,
-        }),
+        Ok(row) => {
+            let value: f32 = row.get("value");
+            HttpResponse::Ok().json(MarkerAnalytics {
+                value,
+                metric_type: metric.to_string(),
+                start_date,
+                end_date,
+            })
+        }
         Err(e) => {
             error!("Failed to fetch marker analytics: {}", e);
             HttpResponse::InternalServerError()

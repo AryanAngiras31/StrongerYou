@@ -185,7 +185,7 @@ async fn main() -> std::io::Result<()> {
             MarkerID SERIAL PRIMARY KEY,
             MarkerName VARCHAR(255) NOT NULL,
             UserID SMALLINT REFERENCES Users(UserID),
-            "Colour" VARCHAR(10) 
+            Clr VARCHAR(10) 
         );     
         "#,
     )
