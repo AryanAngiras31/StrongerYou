@@ -1,356 +1,59 @@
 use actix_web::{web, HttpResponse, Scope};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::{PgPool, Pool, Postgres};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 use std::collections::HashMap;
 use std::fmt;
-use std::str::FromStr;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct MarkerCreate {
     name: String,
-    color: String,
-    user_id: i16,
+    color: String, // Hex color
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct MarkerUpdate {
     name: Option<String>,
     color: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct MarkerLogCreate {
-    value: f32,
-    date: NaiveDate,
-    user_id: i16,
-}
-
-#[derive(Serialize, sqlx::FromRow)]
-struct MarkerResponse {
-    id: i32,
-    name: String,
-    color: String,
-}
-
-#[derive(Serialize, sqlx::FromRow)]
-struct MarkerTimelineEntry {
-    value: f32,
+#[derive(Serialize, Deserialize)]
+struct MarkerValue {
+    value: f64,
     date: NaiveDate,
 }
 
-#[derive(Debug, Deserialize)]
-enum AnalyticMetric {
+#[derive(Serialize)]
+struct TimelineEntry {
+    value: f64,
+    date: String,
+}
+
+#[derive(Debug)]
+enum MetricType {
     Average,
     Sum,
 }
 
-impl FromStr for AnalyticMetric {
+impl fmt::Display for MetricType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MetricType::Average => write!(f, "average"),
+            MetricType::Sum => write!(f, "sum"),
+        }
+    }
+}
+
+impl std::str::FromStr for MetricType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "average" => Ok(AnalyticMetric::Average),
-            "sum" => Ok(AnalyticMetric::Sum),
-            _ => Err("Invalid metric. Supported values: 'average', 'sum'".to_string()),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum MarkerError {
-    NotFound(String),
-    DatabaseError(String),
-    ValidationError(String),
-}
-
-impl fmt::Display for MarkerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MarkerError::NotFound(msg) => write!(f, "Not found: {}", msg),
-            MarkerError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
-            MarkerError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
-        }
-    }
-}
-
-impl From<sqlx::Error> for MarkerError {
-    fn from(err: sqlx::Error) -> Self {
-        MarkerError::DatabaseError(err.to_string())
-    }
-}
-
-async fn get_marker_by_name(
-    db: web::Data<PgPool>,
-    query: web::Query<HashMap<String, String>>,
-) -> Result<HttpResponse, MarkerError> {
-    let name = query.get("name").ok_or_else(|| {
-        MarkerError::ValidationError("marker_name parameter is required".to_string())
-    })?;
-
-    info!("Fetching marker ID for name: {}", name);
-
-    let marker = sqlx::query_as!(
-        MarkerResponse,
-        "SELECT id, marker_name as name, clr as color FROM MarkerList WHERE marker_name = $1",
-        name
-    )
-    .fetch_optional(&**db)
-    .await?;
-
-    match marker {
-        Some(marker) => Ok(HttpResponse::Ok().json(marker)),
-        None => Err(MarkerError::NotFound(format!(
-            "No marker found with name: {}",
-            name
-        ))),
-    }
-}
-
-async fn create_marker(
-    db: web::Data<PgPool>,
-    marker: web::Json<MarkerCreate>,
-) -> Result<HttpResponse, MarkerError> {
-    if !marker.color.starts_with('#') || marker.color.len() != 7 {
-        return Err(MarkerError::ValidationError(
-            "Invalid hex color format. Must be #RRGGBB".to_string(),
-        ));
-    }
-
-    info!("Creating new marker: {}", marker.name);
-
-    let created_marker = sqlx::query_as!(
-        MarkerResponse,
-        r#"
-        INSERT INTO MarkerList (marker_name, user_id, clr)
-        VALUES ($1, $2, $3)
-        RETURNING id, marker_name as name, clr as color
-        "#,
-        marker.name,
-        marker.user_id,
-        marker.color
-    )
-    .fetch_one(&**db)
-    .await?;
-
-    Ok(HttpResponse::Created().json(created_marker))
-}
-
-async fn update_marker(
-    db: web::Data<PgPool>,
-    marker_id: web::Path<i32>,
-    update: web::Json<MarkerUpdate>,
-) -> Result<HttpResponse, MarkerError> {
-    if let Some(ref color) = update.color {
-        if !color.starts_with('#') || color.len() != 7 {
-            return Err(MarkerError::ValidationError(
-                "Invalid hex color format. Must be #RRGGBB".to_string(),
-            ));
-        }
-    }
-
-    let updated_marker = sqlx::query_as!(
-        MarkerResponse,
-        r#"
-        UPDATE MarkerList
-        SET 
-            marker_name = COALESCE($1, marker_name),
-            clr = COALESCE($2, clr)
-        WHERE id = $3
-        RETURNING id, marker_name as name, clr as color
-        "#,
-        update.name,
-        update.color,
-        marker_id.into_inner()
-    )
-    .fetch_optional(&**db)
-    .await?;
-
-    match updated_marker {
-        Some(marker) => Ok(HttpResponse::Ok().json(marker)),
-        None => Err(MarkerError::NotFound(format!(
-            "Marker not found with ID: {}",
-            marker_id
-        ))),
-    }
-}
-
-async fn delete_marker(
-    db: web::Data<PgPool>,
-    marker_id: web::Path<i32>,
-) -> Result<HttpResponse, MarkerError> {
-    let mut transaction = db.begin().await?;
-
-    sqlx::query!("DELETE FROM Markers WHERE id = $1", marker_id.into_inner())
-        .execute(&mut transaction)
-        .await?;
-
-    let result = sqlx::query!(
-        "DELETE FROM MarkerList WHERE id = $1",
-        marker_id.into_inner()
-    )
-    .execute(&mut transaction)
-    .await?;
-
-    transaction.commit().await?;
-
-    if result.rows_affected() > 0 {
-        Ok(HttpResponse::NoContent().finish())
-    } else {
-        Err(MarkerError::NotFound(format!(
-            "Marker not found with ID: {}",
-            marker_id
-        )))
-    }
-}
-
-async fn log_marker_value(
-    db: web::Data<PgPool>,
-    marker_id: web::Path<i32>,
-    log: web::Json<MarkerLogCreate>,
-) -> Result<HttpResponse, MarkerError> {
-    let marker_exists = sqlx::query!(
-        "SELECT 1 FROM MarkerList WHERE id = $1",
-        marker_id.into_inner()
-    )
-    .fetch_optional(&**db)
-    .await?;
-
-    if marker_exists.is_none() {
-        return Err(MarkerError::NotFound(format!(
-            "Marker not found with ID: {}",
-            marker_id
-        )));
-    }
-
-    sqlx::query!(
-        r#"
-        INSERT INTO Markers (id, value, date, user_id)
-        VALUES ($1, $2, $3, $4)
-        "#,
-        marker_id.into_inner(),
-        log.value,
-        log.date,
-        log.user_id
-    )
-    .execute(&**db)
-    .await?;
-
-    Ok(HttpResponse::Created().finish())
-}
-
-async fn get_marker_analytics(
-    db: web::Data<PgPool>,
-    marker_id: web::Path<i32>,
-    query: web::Query<HashMap<String, String>>,
-) -> Result<HttpResponse, MarkerError> {
-    let from_date = NaiveDate::parse_from_str(
-        query.get("from").ok_or_else(|| {
-            MarkerError::ValidationError("from date parameter is required".to_string())
-        })?,
-        "%Y-%m-%d",
-    )
-    .map_err(|e| MarkerError::ValidationError(format!("Invalid from date format: {}", e)))?;
-
-    let to_date = NaiveDate::parse_from_str(
-        query.get("to").ok_or_else(|| {
-            MarkerError::ValidationError("to date parameter is required".to_string())
-        })?,
-        "%Y-%m-%d",
-    )
-    .map_err(|e| MarkerError::ValidationError(format!("Invalid to date format: {}", e)))?;
-
-    let metric =
-        AnalyticMetric::from_str(query.get("metric").ok_or_else(|| {
-            MarkerError::ValidationError("metric parameter is required".to_string())
-        })?)
-        .map_err(MarkerError::ValidationError)?;
-
-    let result = match metric {
-        AnalyticMetric::Average => {
-            sqlx::query_scalar!(
-                "SELECT AVG(value) FROM Markers WHERE id = $1 AND date BETWEEN $2 AND $3",
-                marker_id.into_inner(),
-                from_date,
-                to_date
-            )
-            .fetch_one(&**db)
-            .await?
-        }
-        AnalyticMetric::Sum => {
-            sqlx::query_scalar!(
-                "SELECT SUM(value) FROM Markers WHERE id = $1 AND date BETWEEN $2 AND $3",
-                marker_id.into_inner(),
-                from_date,
-                to_date
-            )
-            .fetch_one(&**db)
-            .await?
-        }
-    };
-
-    Ok(HttpResponse::Ok().json(json!({ "value": result.unwrap_or(0.0) })))
-}
-
-async fn get_marker_timeline(
-    db: web::Data<PgPool>,
-    marker_id: web::Path<i32>,
-    query: web::Query<HashMap<String, String>>,
-) -> Result<HttpResponse, MarkerError> {
-    let from_date = NaiveDate::parse_from_str(
-        query.get("from").ok_or_else(|| {
-            MarkerError::ValidationError("from date parameter is required".to_string())
-        })?,
-        "%Y-%m-%d",
-    )
-    .map_err(|e| MarkerError::ValidationError(format!("Invalid from date format: {}", e)))?;
-
-    let to_date = NaiveDate::parse_from_str(
-        query.get("to").ok_or_else(|| {
-            MarkerError::ValidationError("to date parameter is required".to_string())
-        })?,
-        "%Y-%m-%d",
-    )
-    .map_err(|e| MarkerError::ValidationError(format!("Invalid to date format: {}", e)))?;
-
-    let timeline = sqlx::query_as!(
-        MarkerTimelineEntry,
-        r#"
-        SELECT value, date
-        FROM Markers
-        WHERE id = $1 AND date BETWEEN $2 AND $3
-        ORDER BY date ASC
-        "#,
-        marker_id.into_inner(),
-        from_date,
-        to_date
-    )
-    .fetch_all(&**db)
-    .await?;
-
-    Ok(HttpResponse::Ok().json(timeline))
-}
-
-impl actix_web::ResponseError for MarkerError {
-    fn error_response(&self) -> HttpResponse {
-        match self {
-            MarkerError::NotFound(msg) => HttpResponse::NotFound().json(json!({
-                "error": "not_found",
-                "message": msg
-            })),
-            MarkerError::DatabaseError(msg) => {
-                error!("Database error: {}", msg);
-                HttpResponse::InternalServerError().json(json!({
-                    "error": "database_error",
-                    "message": "An internal database error occurred"
-                }))
-            }
-            MarkerError::ValidationError(msg) => HttpResponse::BadRequest().json(json!({
-                "error": "validation_error",
-                "message": msg
-            })),
+            "average" => Ok(MetricType::Average),
+            "sum" => Ok(MetricType::Sum),
+            _ => Err("Invalid metric type. Must be 'average' or 'sum'".to_string()),
         }
     }
 }
@@ -367,4 +70,331 @@ pub fn init_routes() -> Scope {
             web::get().to(get_marker_analytics),
         )
         .route("/{marker_id}/timeline", web::get().to(get_marker_timeline))
+}
+
+async fn get_marker_by_name(
+    db: web::Data<PgPool>,
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let marker_name = match query.get("name") {
+        Some(name) => name,
+        None => {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "marker_name parameter is required"
+            }))
+        }
+    };
+
+    match sqlx::query("SELECT MarkerID FROM MarkerList WHERE MarkerName = $1")
+        .bind(marker_name)
+        .fetch_one(db.get_ref())
+        .await
+    {
+        Ok(row) => {
+            let marker_id: i32 = row.get("MarkerID");
+            info!("Retrieved MarkerID {} for name {}", marker_id, marker_name);
+            HttpResponse::Ok().json(json!({ "marker_id": marker_id }))
+        }
+        Err(e) => {
+            error!("Failed to fetch marker ID: {}", e);
+            HttpResponse::NotFound().json(json!({
+                "error": format!("Marker with name '{}' not found", marker_name)
+            }))
+        }
+    }
+}
+
+async fn create_marker(db: web::Data<PgPool>, marker: web::Json<MarkerCreate>) -> HttpResponse {
+    // Validate hex color format
+    if !marker.color.starts_with('#') || marker.color.len() != 7 {
+        return HttpResponse::BadRequest().json(json!({
+            "error": "Invalid color format. Must be a hex color (e.g., '#FF0000')"
+        }));
+    }
+
+    match sqlx::query("INSERT INTO MarkerList (MarkerName, Clr) VALUES ($1, $2) RETURNING MarkerID")
+        .bind(&marker.name)
+        .bind(&marker.color)
+        .fetch_one(db.get_ref())
+        .await
+    {
+        Ok(row) => {
+            let marker_id: i32 = row.get("MarkerID");
+            info!("Created new marker: {} with ID {}", marker.name, marker_id);
+            HttpResponse::Created().json(json!({ "marker_id": marker_id }))
+        }
+        Err(e) => {
+            error!("Failed to create marker: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to create marker"
+            }))
+        }
+    }
+}
+
+async fn update_marker(
+    db: web::Data<PgPool>,
+    marker_id: web::Path<i32>,
+    update: web::Json<MarkerUpdate>,
+) -> HttpResponse {
+    let mut updates = vec![];
+    let mut params = vec![];
+
+    if let Some(name) = &update.name {
+        updates.push("MarkerName = $1");
+        params.push(name);
+    }
+
+    if let Some(color) = &update.color {
+        if !color.starts_with('#') || color.len() != 7 {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid color format. Must be a hex color (e.g., '#FF0000')"
+            }));
+        }
+        updates.push("Clr = $2");
+        params.push(color);
+    }
+
+    if updates.is_empty() {
+        return HttpResponse::BadRequest().json(json!({
+            "error": "No update parameters provided"
+        }));
+    }
+
+    let query = format!(
+        "UPDATE MarkerList SET {} WHERE MarkerID = ${}",
+        updates.join(", "),
+        params.len() + 1
+    );
+
+    match sqlx::query(&query)
+        .bind(&params[0])
+        .bind(&params[1])
+        .bind(marker_id.into_inner())
+        .execute(db.get_ref())
+        .await
+    {
+        Ok(_) => {
+            info!("Updated marker {}", &marker_id);
+            HttpResponse::Ok().json(json!({ "status": "updated" }))
+        }
+        Err(e) => {
+            error!("Failed to update marker {}: {}", marker_id, e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": format!("Failed to update marker {}", marker_id)
+            }))
+        }
+    }
+}
+
+async fn delete_marker(db: web::Data<PgPool>, marker_id: web::Path<i32>) -> HttpResponse {
+    let mut transaction = match db.begin().await {
+        Ok(transaction) => transaction,
+        Err(e) => {
+            error!("Failed to start transaction: {}", e);
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to start database transaction"
+            }));
+        }
+    };
+
+    // Delete from Markers table first
+    if let Err(e) = sqlx::query("DELETE FROM Markers WHERE MarkerID = $1")
+        .bind(marker_id.into_inner())
+        .execute(&transaction)
+        .await
+    {
+        error!("Failed to delete from Markers: {}", e);
+        let _ = transaction.rollback().await;
+        return HttpResponse::InternalServerError().json(json!({
+            "error": "Failed to delete marker logs"
+        }));
+    }
+
+    // Then delete from MarkerList
+    if let Err(e) = sqlx::query("DELETE FROM MarkerList WHERE MarkerID = $1")
+        .bind(marker_id.into_inner())
+        .execute(&transaction)
+        .await
+    {
+        error!("Failed to delete from MarkerList: {}", e);
+        let _ = transaction.rollback().await;
+        return HttpResponse::InternalServerError().json(json!({
+            "error": "Failed to delete marker"
+        }));
+    }
+
+    match transaction.commit().await {
+        Ok(_) => {
+            info!("Deleted marker {}", marker_id);
+            HttpResponse::Ok().json(json!({ "status": "deleted" }))
+        }
+        Err(e) => {
+            error!("Failed to commit transaction: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to commit changes"
+            }))
+        }
+    }
+}
+
+async fn log_marker_value(
+    db: web::Data<PgPool>,
+    marker_id: web::Path<i32>,
+    value: web::Json<MarkerValue>,
+) -> HttpResponse {
+    match sqlx::query("INSERT INTO Markers (MarkerID, Value, Date) VALUES ($1, $2, $3)")
+        .bind(marker_id.into_inner())
+        .bind(value.value)
+        .bind(value.date)
+        .execute(db.get_ref())
+        .await
+    {
+        Ok(_) => {
+            info!("Logged value {} for marker {}", value.value, marker_id);
+            HttpResponse::Created().json(json!({ "status": "logged" }))
+        }
+        Err(e) => {
+            error!("Failed to log marker value: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to log marker value"
+            }))
+        }
+    }
+}
+
+async fn get_marker_analytics(
+    db: web::Data<PgPool>,
+    marker_id: web::Path<i32>,
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let start_date = match query
+        .get("from")
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+    {
+        Some(date) => date,
+        None => {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid or missing 'from' date. Format: YYYY-MM-DD"
+            }))
+        }
+    };
+
+    let end_date = match query
+        .get("to")
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+    {
+        Some(date) => date,
+        None => {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid or missing 'to' date. Format: YYYY-MM-DD"
+            }))
+        }
+    };
+
+    let metric = match query
+        .get("metric")
+        .and_then(|m| m.parse::<MetricType>().ok())
+    {
+        Some(m) => m,
+        None => {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid or missing 'metric' parameter. Must be 'average' or 'sum'"
+            }))
+        }
+    };
+
+    let query_str = match metric {
+        MetricType::Average => "SELECT AVG(Value) as result",
+        MetricType::Sum => "SELECT SUM(Value) as result",
+    };
+
+    let query_str = format!(
+        "{} FROM Markers WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3",
+        query_str
+    );
+
+    match sqlx::query(&query_str)
+        .bind(marker_id.into_inner())
+        .bind(start_date)
+        .bind(end_date)
+        .fetch_one(db.get_ref())
+        .await
+    {
+        Ok(row) => {
+            let result: f64 = row.get("result");
+            info!("Calculated {} for marker {}", metric, marker_id);
+            HttpResponse::Ok().json(json!({ "result": result }))
+        }
+        Err(e) => {
+            error!("Failed to calculate analytics: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to calculate marker analytics"
+            }))
+        }
+    }
+}
+
+async fn get_marker_timeline(
+    db: web::Data<PgPool>,
+    marker_id: web::Path<i32>,
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let start_date = match query
+        .get("from")
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+    {
+        Some(date) => date,
+        None => {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid or missing 'from' date. Format: YYYY-MM-DD"
+            }))
+        }
+    };
+
+    let end_date = match query
+        .get("to")
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+    {
+        Some(date) => date,
+        None => {
+            return HttpResponse::BadRequest().json(json!({
+                "error": "Invalid or missing 'to' date. Format: YYYY-MM-DD"
+            }))
+        }
+    };
+
+    match sqlx::query(
+        "SELECT Value, Date FROM Markers 
+         WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3 
+         ORDER BY Date ASC",
+    )
+    .bind(marker_id.into_inner())
+    .bind(start_date)
+    .bind(end_date)
+    .fetch_all(db.get_ref())
+    .await
+    {
+        Ok(rows) => {
+            let timeline: Vec<TimelineEntry> = rows
+                .iter()
+                .map(|row| TimelineEntry {
+                    value: row.get("Value"),
+                    date: row
+                        .get::<NaiveDate, _>("Date")
+                        .format("%Y-%m-%d")
+                        .to_string(),
+                })
+                .collect();
+
+            info!("Retrieved timeline for marker {}", marker_id);
+            HttpResponse::Ok().json(timeline)
+        }
+        Err(e) => {
+            error!("Failed to fetch marker timeline: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch marker timeline"
+            }))
+        }
+    }
 }

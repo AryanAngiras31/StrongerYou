@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS Routines (
     RoutineName VARCHAR(255) NOT NULL,
     Timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UserID SMALLINT REFERENCES Users(UserID),
-    ExerciseList TEXT[] NOT NULL
+    ExerciseList TEXT[] NOT NULL    
 );
 
 CREATE TABLE IF NOT EXISTS ExerciseList (
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS MarkerList (
     MarkerID SERIAL PRIMARY KEY,
     MarkerName VARCHAR(255) NOT NULL,
     UserID SMALLINT REFERENCES Users(UserID),
-    "Colour" VARCHAR(10)
+    "Clr" VARCHAR(10)
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_date_joined ON Users(DateJoined);
