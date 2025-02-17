@@ -175,7 +175,7 @@ async fn update_marker(
         .await
     {
         Ok(_) => {
-            info!("Updated marker {}", &marker_id);
+            info!("Updated marker {}", marker_id);
             HttpResponse::Ok().json(json!({ "status": "updated" }))
         }
         Err(e) => {
