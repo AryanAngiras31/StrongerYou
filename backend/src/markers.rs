@@ -59,7 +59,7 @@ impl std::str::FromStr for MetricType {
 }
 
 pub fn init_routes() -> Scope {
-    web::scope("/markers")
+    let scope = web::scope("/markers")
         .route("", web::get().to(get_marker_by_name))
         .route("", web::post().to(create_marker))
         .route("/{marker_id}", web::put().to(update_marker))
@@ -69,7 +69,18 @@ pub fn init_routes() -> Scope {
             "/{marker_id}/analytics",
             web::get().to(get_marker_analytics),
         )
-        .route("/{marker_id}/timeline", web::get().to(get_marker_timeline))
+        .route("/{marker_id}/timeline", web::get().to(get_marker_timeline));
+
+    println!("Registering marker routes:");
+    println!("GET /markers");
+    println!("POST /markers");
+    println!("PUT /markers/{{id}}");
+    println!("DELETE /markers/{{id}}");
+    println!("POST /markers/{{id}}/logs");
+    println!("GET /markers/{{id}}/analytics");
+    println!("GET /markers/{{id}}/timeline");
+
+    scope
 }
 
 async fn get_marker_by_name(

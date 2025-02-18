@@ -166,12 +166,11 @@ async fn main() -> std::io::Result<()> {
 
     sqlx::query(
         r#"
-        CREATE TABLE IF NOT EXISTS Markers (
+        CREATE TABLE IF NOT EXISTS MarkerList (
             MarkerID SERIAL PRIMARY KEY,
             MarkerName VARCHAR(255) NOT NULL,
-            Value REAL NOT NULL,
-            Date DATE NOT NULL,
-            UserID SMALLINT REFERENCES Users(UserID)
+            UserID SMALLINT REFERENCES Users(UserID),
+            Clr VARCHAR(10) 
         );     
         "#,
     )
@@ -181,11 +180,11 @@ async fn main() -> std::io::Result<()> {
 
     sqlx::query(
         r#"
-        CREATE TABLE IF NOT EXISTS MarkerList (
-            MarkerID SERIAL PRIMARY KEY,
-            MarkerName VARCHAR(255) NOT NULL,
-            UserID SMALLINT REFERENCES Users(UserID),
-            Clr VARCHAR(10) 
+        CREATE TABLE IF NOT EXISTS Markers (
+            MarkerID INTEGER REFERENCES MarkerList(MarkerID),
+            Value REAL NOT NULL,
+            Date DATE NOT NULL,
+            UserID SMALLINT REFERENCES Users(UserID)
         );     
         "#,
     )
@@ -248,7 +247,7 @@ async fn main() -> std::io::Result<()> {
             .service(routines::delete_routine)
             .service(routines::test_route)
             .service(web::scope("").configure(exercises::init_routes))
-            .service(markers::init_routes()) // Remove the configure() call
+            .service(markers::init_routes())
     })
     .bind(("127.0.0.1", port))?
     .run()
