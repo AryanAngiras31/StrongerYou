@@ -58,29 +58,20 @@ impl std::str::FromStr for MetricType {
     }
 }
 
-pub fn init_routes() -> Scope {
-    let scope = web::scope("/markers")
-        .route("", web::get().to(get_marker_by_name))
-        .route("", web::post().to(create_marker))
-        .route("/{marker_id}", web::put().to(update_marker))
-        .route("/{marker_id}", web::delete().to(delete_marker))
-        .route("/{marker_id}/logs", web::post().to(log_marker_value))
-        .route(
-            "/{marker_id}/analytics",
-            web::get().to(get_marker_analytics),
-        )
-        .route("/{marker_id}/timeline", web::get().to(get_marker_timeline));
-
-    println!("Registering marker routes:");
-    println!("GET /markers");
-    println!("POST /markers");
-    println!("PUT /markers/{{id}}");
-    println!("DELETE /markers/{{id}}");
-    println!("POST /markers/{{id}}/logs");
-    println!("GET /markers/{{id}}/analytics");
-    println!("GET /markers/{{id}}/timeline");
-
-    scope
+pub fn init_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/markers")
+            .route("", web::get().to(get_marker_by_name))
+            .route("", web::post().to(create_marker))
+            .route("/{marker_id}", web::put().to(update_marker))
+            .route("/{marker_id}", web::delete().to(delete_marker))
+            .route("/{marker_id}/logs", web::post().to(log_marker_value))
+            .route(
+                "/{marker_id}/analytics",
+                web::get().to(get_marker_analytics),
+            )
+            .route("/{marker_id}/timeline", web::get().to(get_marker_timeline)),
+    );
 }
 
 async fn get_marker_by_name(
