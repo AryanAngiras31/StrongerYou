@@ -3,7 +3,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::{PgPool, Postgres, Row, Transaction};
+use sqlx::{PgPool, Postgres, Row};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -15,8 +15,8 @@ struct MarkerCreate {
 
 #[derive(Serialize, Deserialize)]
 struct MarkerUpdate {
-    name: Option<String>,
-    color: Option<String>,
+    name: String,
+    color: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -73,10 +73,10 @@ pub fn init_routes() -> Scope {
 }
 
 async fn get_marker_by_name(
-    db: web::Data<PgPool>,
-    query: web::Query<HashMap<String, String>>,
+    pool: web::Data<PgPool>,
+    request: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
-    let marker_name = match query.get("name") {
+    let marker_name = match request.get("name") {
         Some(name) => name,
         None => {
             return HttpResponse::BadRequest().json(json!({
@@ -87,7 +87,7 @@ async fn get_marker_by_name(
 
     match sqlx::query("SELECT MarkerID FROM MarkerList WHERE MarkerName = $1")
         .bind(marker_name)
-        .fetch_one(db.get_ref())
+        .fetch_one(pool.get_ref())
         .await
     {
         Ok(row) => {
@@ -104,8 +104,7 @@ async fn get_marker_by_name(
     }
 }
 
-async fn create_marker(db: web::Data<PgPool>, marker: web::Json<MarkerCreate>) -> HttpResponse {
-    // Validate hex color format
+async fn create_marker(pool: web::Data<PgPool>, marker: web::Json<MarkerCreate>) -> HttpResponse {
     if !marker.color.starts_with('#') || marker.color.len() != 7 {
         return HttpResponse::BadRequest().json(json!({
             "error": "Invalid color format. Must be a hex color (e.g., '#FF0000')"
@@ -115,7 +114,7 @@ async fn create_marker(db: web::Data<PgPool>, marker: web::Json<MarkerCreate>) -
     match sqlx::query("INSERT INTO MarkerList (MarkerName, Clr) VALUES ($1, $2) RETURNING MarkerID")
         .bind(&marker.name)
         .bind(&marker.color)
-        .fetch_one(db.get_ref())
+        .fetch_one(pool.get_ref())
         .await
     {
         Ok(row) => {
@@ -133,45 +132,22 @@ async fn create_marker(db: web::Data<PgPool>, marker: web::Json<MarkerCreate>) -
 }
 
 async fn update_marker(
-    db: web::Data<PgPool>,
+    pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
     update: web::Json<MarkerUpdate>,
 ) -> HttpResponse {
-    let mut updates = vec![];
-    let mut params = vec![];
-
-    if let Some(name) = &update.name {
-        updates.push("MarkerName = $1");
-        params.push(name);
-    }
-
-    if let Some(color) = &update.color {
-        if !color.starts_with('#') || color.len() != 7 {
-            return HttpResponse::BadRequest().json(json!({
-                "error": "Invalid color format. Must be a hex color (e.g., '#FF0000')"
-            }));
-        }
-        updates.push("Clr = $2");
-        params.push(color);
-    }
-
-    if updates.is_empty() {
+    if !update.color.starts_with('#') || update.color.len() != 7 {
         return HttpResponse::BadRequest().json(json!({
-            "error": "No update parameters provided"
+            "error": "Invalid color format. Must be a hex color (e.g., '#FF0000')"
         }));
     }
 
-    let query = format!(
-        "UPDATE MarkerList SET {} WHERE MarkerID = ${}",
-        updates.join(", "),
-        params.len() + 1
-    );
-
-    match sqlx::query(&query)
-        .bind(&params[0])
-        .bind(&params[1])
-        .bind(marker_id.into_inner())
-        .execute(db.get_ref())
+    let marker_id = marker_id.into_inner();
+    match sqlx::query("UPDATE MarkerList SET MarkerName = $1, Clr = $2 WHERE MarkerID = $3")
+        .bind(&update.name)
+        .bind(&update.color)
+        .bind(marker_id)
+        .execute(pool.get_ref())
         .await
     {
         Ok(_) => {
@@ -187,67 +163,51 @@ async fn update_marker(
     }
 }
 
-async fn delete_marker(db: web::Data<PgPool>, marker_id: web::Path<i32>) -> HttpResponse {
-    let mut transaction = match db.begin().await {
-        Ok(transaction) => transaction,
-        Err(e) => {
-            error!("Failed to start transaction: {}", e);
-            return HttpResponse::InternalServerError().json(json!({
-                "error": "Failed to start database transaction"
-            }));
-        }
-    };
+async fn delete_marker(pool: web::Data<PgPool>, marker_id: web::Path<i32>) -> HttpResponse {
+    let marker_id = marker_id.into_inner();
 
     // Delete from Markers table first
     if let Err(e) = sqlx::query("DELETE FROM Markers WHERE MarkerID = $1")
-        .bind(marker_id.into_inner())
-        .execute(&transaction)
+        .bind(marker_id)
+        .execute(pool.get_ref())
         .await
     {
         error!("Failed to delete from Markers: {}", e);
-        let _ = transaction.rollback().await;
         return HttpResponse::InternalServerError().json(json!({
             "error": "Failed to delete marker logs"
         }));
     }
 
     // Then delete from MarkerList
-    if let Err(e) = sqlx::query("DELETE FROM MarkerList WHERE MarkerID = $1")
-        .bind(marker_id.into_inner())
-        .execute(&transaction)
+    match sqlx::query("DELETE FROM MarkerList WHERE MarkerID = $1")
+        .bind(marker_id)
+        .execute(pool.get_ref())
         .await
     {
-        error!("Failed to delete from MarkerList: {}", e);
-        let _ = transaction.rollback().await;
-        return HttpResponse::InternalServerError().json(json!({
-            "error": "Failed to delete marker"
-        }));
-    }
-
-    match transaction.commit().await {
         Ok(_) => {
             info!("Deleted marker {}", marker_id);
             HttpResponse::Ok().json(json!({ "status": "deleted" }))
         }
         Err(e) => {
-            error!("Failed to commit transaction: {}", e);
+            error!("Failed to delete from MarkerList: {}", e);
             HttpResponse::InternalServerError().json(json!({
-                "error": "Failed to commit changes"
+                "error": "Failed to delete marker"
             }))
         }
     }
 }
 
 async fn log_marker_value(
-    db: web::Data<PgPool>,
+    pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
     value: web::Json<MarkerValue>,
 ) -> HttpResponse {
+    let marker_id = marker_id.into_inner();
     match sqlx::query("INSERT INTO Markers (MarkerID, Value, Date) VALUES ($1, $2, $3)")
-        .bind(marker_id.into_inner())
+        .bind(marker_id)
         .bind(value.value)
         .bind(value.date)
-        .execute(db.get_ref())
+        .execute(pool.get_ref())
         .await
     {
         Ok(_) => {
@@ -264,11 +224,11 @@ async fn log_marker_value(
 }
 
 async fn get_marker_analytics(
-    db: web::Data<PgPool>,
+    pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
-    query: web::Query<HashMap<String, String>>,
+    request: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
-    let start_date = match query
+    let start_date = match request
         .get("from")
         .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
     {
@@ -280,7 +240,7 @@ async fn get_marker_analytics(
         }
     };
 
-    let end_date = match query
+    let end_date = match request
         .get("to")
         .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
     {
@@ -292,7 +252,7 @@ async fn get_marker_analytics(
         }
     };
 
-    let metric = match query
+    let metric = match request
         .get("metric")
         .and_then(|m| m.parse::<MetricType>().ok())
     {
@@ -314,11 +274,12 @@ async fn get_marker_analytics(
         query_str
     );
 
+    let marker_id = marker_id.into_inner();
     match sqlx::query(&query_str)
-        .bind(marker_id.into_inner())
+        .bind(marker_id)
         .bind(start_date)
         .bind(end_date)
-        .fetch_one(db.get_ref())
+        .fetch_one(pool.get_ref())
         .await
     {
         Ok(row) => {
@@ -336,11 +297,11 @@ async fn get_marker_analytics(
 }
 
 async fn get_marker_timeline(
-    db: web::Data<PgPool>,
+    pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
-    query: web::Query<HashMap<String, String>>,
+    request: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
-    let start_date = match query
+    let start_date = match request
         .get("from")
         .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
     {
@@ -352,7 +313,7 @@ async fn get_marker_timeline(
         }
     };
 
-    let end_date = match query
+    let end_date = match request
         .get("to")
         .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
     {
@@ -364,15 +325,16 @@ async fn get_marker_timeline(
         }
     };
 
+    let marker_id = marker_id.into_inner();
     match sqlx::query(
         "SELECT Value, Date FROM Markers 
          WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3 
          ORDER BY Date ASC",
     )
-    .bind(marker_id.into_inner())
+    .bind(marker_id)
     .bind(start_date)
     .bind(end_date)
-    .fetch_all(db.get_ref())
+    .fetch_all(pool.get_ref())
     .await
     {
         Ok(rows) => {
