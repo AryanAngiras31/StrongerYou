@@ -247,7 +247,7 @@ async fn main() -> std::io::Result<()> {
             .service(routines::delete_routine)
             .service(routines::test_route)
             .service(web::scope("").configure(exercises::init_routes))
-            .configure(markers::init_routes)
+            .service(web::scope("").configure(markers::init_routes))
     })
     .bind(("127.0.0.1", port))?
     .run()

@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, Scope};
+use actix_web::{delete, get, post, put, web, HttpResponse, Scope};
 use chrono::{NaiveDate, NaiveDateTime};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
@@ -59,21 +59,16 @@ impl std::str::FromStr for MetricType {
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/markers")
-            .route("", web::get().to(get_marker_by_name))
-            .route("", web::post().to(create_marker))
-            .route("/{marker_id}", web::put().to(update_marker))
-            .route("/{marker_id}", web::delete().to(delete_marker))
-            .route("/{marker_id}/logs", web::post().to(log_marker_value))
-            .route(
-                "/{marker_id}/analytics",
-                web::get().to(get_marker_analytics),
-            )
-            .route("/{marker_id}/timeline", web::get().to(get_marker_timeline)),
-    );
+    cfg.service(get_marker_by_name)
+        .service(create_marker)
+        .service(update_marker)
+        .service(delete_marker)
+        .service(log_marker_value)
+        .service(get_marker_analytics)
+        .service(get_marker_timeline);
 }
 
+#[get("/markers")]
 async fn get_marker_by_name(
     pool: web::Data<PgPool>,
     request: web::Query<HashMap<String, String>>,
@@ -106,6 +101,7 @@ async fn get_marker_by_name(
     }
 }
 
+#[post("/markers")]
 async fn create_marker(pool: web::Data<PgPool>, marker: web::Json<MarkerCreate>) -> HttpResponse {
     if !marker.color.starts_with('#') || marker.color.len() != 7 {
         return HttpResponse::BadRequest().json(json!({
@@ -133,6 +129,7 @@ async fn create_marker(pool: web::Data<PgPool>, marker: web::Json<MarkerCreate>)
     }
 }
 
+#[put("/markers/{marker_id}")]
 async fn update_marker(
     pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
@@ -165,6 +162,7 @@ async fn update_marker(
     }
 }
 
+#[delete("/markers/{marker_id}")]
 async fn delete_marker(pool: web::Data<PgPool>, marker_id: web::Path<i32>) -> HttpResponse {
     let marker_id = marker_id.into_inner();
 
@@ -199,6 +197,7 @@ async fn delete_marker(pool: web::Data<PgPool>, marker_id: web::Path<i32>) -> Ht
     }
 }
 
+#[post("/markers/{marker_id}/logs")]
 async fn log_marker_value(
     pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
@@ -225,6 +224,7 @@ async fn log_marker_value(
     }
 }
 
+#[get("/markers/{marker_id}/analytics")]
 async fn get_marker_analytics(
     pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
@@ -298,6 +298,7 @@ async fn get_marker_analytics(
     }
 }
 
+#[get("/markers/{marker_id}/timeline")]
 async fn get_marker_timeline(
     pool: web::Data<PgPool>,
     marker_id: web::Path<i32>,
