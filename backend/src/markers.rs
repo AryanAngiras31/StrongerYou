@@ -88,7 +88,7 @@ async fn get_marker_by_name(
         .await
     {
         Ok(row) => {
-            let marker_id: i32 = row.get("MarkerID");
+            let marker_id: i32 = row.get("markerid");
             info!("Retrieved MarkerID {} for name {}", marker_id, marker_name);
             HttpResponse::Ok().json(json!({ "marker_id": marker_id }))
         }
@@ -344,7 +344,7 @@ async fn get_marker_timeline(
             let timeline: Vec<TimelineEntry> = rows
                 .iter()
                 .map(|row| TimelineEntry {
-                    value: row.get("Value"),
+                    value: row.get("value"),
                     date: row
                         .get::<NaiveDate, _>("Date")
                         .format("%Y-%m-%d")
