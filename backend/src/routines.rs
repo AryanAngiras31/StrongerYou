@@ -115,11 +115,6 @@ async fn get_routine_by_name(
     pool: web::Data<PgPool>,
     request: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
-    // Check if this is a request for listing routines
-    if request.contains_key("sort") {
-        return list_routines(pool, request).await;
-    }
-
     // Otherwise proceed with getting routine by name
     let routine_name = match request.get("name") {
         Some(name) => name,
