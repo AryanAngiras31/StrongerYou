@@ -337,9 +337,9 @@ async fn get_marker_timeline(
 
     let marker_id = marker_id.into_inner();
     match sqlx::query(
-        "SELECT Value, Date FROM Markers 
-         WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3 
-         ORDER BY Date ASC",
+        "SELECT Value, Date FROM Markers
+          WHERE MarkerID = $1 AND Date BETWEEN $2 AND $3
+          ORDER BY Date ASC",
     )
     .bind(marker_id)
     .bind(start_date)
@@ -351,9 +351,9 @@ async fn get_marker_timeline(
             let timeline: Vec<TimelineEntry> = rows
                 .iter()
                 .map(|row| TimelineEntry {
-                    value: row.get("value"),
+                    value: row.get::<f32, _>("value") as f64, // Convert f32 to f64
                     date: row
-                        .get::<NaiveDate, _>("Date")
+                        .get::<NaiveDate, _>("date")
                         .format("%Y-%m-%d")
                         .to_string(),
                 })
