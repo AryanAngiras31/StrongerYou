@@ -3,7 +3,7 @@ use chrono::{NaiveDate, NaiveDateTime, Utc};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::{FromRow, PgPool, Postgres, Row};
+use sqlx::{FromRow, PgPool, Postgres, Row, Transaction};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
@@ -57,6 +57,57 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .service(update_routine)
         .service(delete_routine)
         .service(list_routines);
+}
+
+#[get("/routines")]
+async fn list_routines(
+    pool: web::Data<PgPool>,
+    request: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    // Verify sort parameter is by createdAt
+    if request.get("sort") != Some(&"createdAt".to_string()) {
+        return HttpResponse::BadRequest().json(json!({
+            "error": "sort parameter must be 'createdAt'"
+        }));
+    }
+
+    // Check if we need to include lastPerformed
+    let include_last_performed = request.get("include") == Some(&"lastPerformed".to_string());
+
+    // Query to get routines with optional last performed date
+    let query = if include_last_performed {
+        "SELECT r.RoutineID, r.RoutineName, r.Description, r.CreatedAt, 
+         (SELECT MAX(w.Start::date) FROM Workout w WHERE w.RoutineID = r.RoutineID) as last_performed
+         FROM Routines r ORDER BY r.CreatedAt ASC"
+    } else {
+        "SELECT r.RoutineID, r.RoutineName, r.Description, r.CreatedAt,
+         NULL as last_performed
+         FROM Routines r ORDER BY r.CreatedAt ASC"
+    };
+
+    match sqlx::query(query).fetch_all(pool.get_ref()).await {
+        Ok(rows) => {
+            let routines: Vec<RoutineInfo> = rows
+                .iter()
+                .map(|row| RoutineInfo {
+                    routine_id: row.get("routineid"),
+                    name: row.get("routinename"),
+                    description: row.get("description"),
+                    created_at: row.get("createdat"),
+                    last_performed: row.get("last_performed"),
+                })
+                .collect();
+
+            info!("Retrieved {} routines", routines.len());
+            HttpResponse::Ok().json(routines)
+        }
+        Err(e) => {
+            error!("Failed to fetch routines: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch routines"
+            }))
+        }
+    }
 }
 
 #[get("/routines")]
@@ -137,7 +188,7 @@ async fn create_routine(
     .bind(&routine.name)
     .bind(&routine.description)
     .bind(Utc::now().naive_utc())
-    .fetch_one(&mut tx)
+    .fetch_one(&mut *tx) // Deref tx with &mut *tx
     .await
     {
         Ok(row) => row.get::<i32, _>("routineid"),
@@ -159,7 +210,7 @@ async fn create_routine(
         .bind(routine_id)
         .bind(exercise.exercise_id)
         .bind(exercise.sets)
-        .execute(&mut tx)
+        .execute(&mut *tx) // Deref tx with &mut *tx
         .await
         {
             error!(
@@ -240,7 +291,7 @@ async fn update_routine(
             .bind(&update.name)
             .bind(&update.description)
             .bind(routine_id)
-            .execute(&mut tx)
+            .execute(&mut *tx) // Deref tx with &mut *tx
             .await
     {
         error!("Failed to update Routines table: {}", e);
@@ -253,7 +304,7 @@ async fn update_routine(
     // Delete old exercise associations
     if let Err(e) = sqlx::query("DELETE FROM Routines_Exercises_Sets WHERE RoutineID = $1")
         .bind(routine_id)
-        .execute(&mut tx)
+        .execute(&mut *tx) // Deref tx with &mut *tx
         .await
     {
         error!("Failed to delete old exercises: {}", e);
@@ -272,7 +323,7 @@ async fn update_routine(
         .bind(routine_id)
         .bind(exercise.exercise_id)
         .bind(exercise.sets)
-        .execute(&mut tx)
+        .execute(&mut *tx) // Deref tx with &mut *tx
         .await
         {
             error!(
@@ -316,7 +367,7 @@ async fn delete_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> 
     // Delete from Routines_Exercises_Sets first
     if let Err(e) = sqlx::query("DELETE FROM Routines_Exercises_Sets WHERE RoutineID = $1")
         .bind(routine_id)
-        .execute(&mut tx)
+        .execute(&mut *tx) // Deref tx with &mut *tx
         .await
     {
         error!("Failed to delete from Routines_Exercises_Sets: {}", e);
@@ -329,7 +380,7 @@ async fn delete_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> 
     // Then delete from Routines
     match sqlx::query("DELETE FROM Routines WHERE RoutineID = $1")
         .bind(routine_id)
-        .execute(&mut tx)
+        .execute(&mut *tx) // Deref tx with &mut *tx
         .await
     {
         Ok(result) => {
@@ -359,55 +410,4 @@ async fn delete_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> 
 
     info!("Deleted routine {}", routine_id);
     HttpResponse::Ok().json(json!({ "status": "deleted" }))
-}
-
-#[get("/routines")]
-async fn list_routines(
-    pool: web::Data<PgPool>,
-    request: web::Query<HashMap<String, String>>,
-) -> HttpResponse {
-    // Verify sort parameter is by createdAt
-    if request.get("sort") != Some(&"createdAt".to_string()) {
-        return HttpResponse::BadRequest().json(json!({
-            "error": "sort parameter must be 'createdAt'"
-        }));
-    }
-
-    // Check if we need to include lastPerformed
-    let include_last_performed = request.get("include") == Some(&"lastPerformed".to_string());
-
-    // Query to get routines with optional last performed date
-    let query = if include_last_performed {
-        "SELECT r.RoutineID, r.RoutineName, r.Description, r.CreatedAt, 
-         (SELECT MAX(w.Start::date) FROM Workout w WHERE w.RoutineID = r.RoutineID) as last_performed
-         FROM Routines r ORDER BY r.CreatedAt ASC"
-    } else {
-        "SELECT r.RoutineID, r.RoutineName, r.Description, r.CreatedAt,
-         NULL as last_performed
-         FROM Routines r ORDER BY r.CreatedAt ASC"
-    };
-
-    match sqlx::query(query).fetch_all(pool.get_ref()).await {
-        Ok(rows) => {
-            let routines: Vec<RoutineInfo> = rows
-                .iter()
-                .map(|row| RoutineInfo {
-                    routine_id: row.get("routineid"),
-                    name: row.get("routinename"),
-                    description: row.get("description"),
-                    created_at: row.get("createdat"),
-                    last_performed: row.get("last_performed"),
-                })
-                .collect();
-
-            info!("Retrieved {} routines", routines.len());
-            HttpResponse::Ok().json(routines)
-        }
-        Err(e) => {
-            error!("Failed to fetch routines: {}", e);
-            HttpResponse::InternalServerError().json(json!({
-                "error": "Failed to fetch routines"
-            }))
-        }
-    }
 }
