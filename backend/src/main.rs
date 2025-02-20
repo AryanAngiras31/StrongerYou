@@ -242,10 +242,6 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Logger::default()) // Enable logging
             .app_data(web::Data::new(pool.clone()))
-            .service(routines::create_routine)
-            .service(routines::modify_routine)
-            .service(routines::delete_routine)
-            .service(routines::test_route)
             .configure(configure_routes)
     })
     .bind(("127.0.0.1", port))?
@@ -256,4 +252,5 @@ async fn main() -> std::io::Result<()> {
 fn configure_routes(cfg: &mut web::ServiceConfig) {
     exercises::init_routes(cfg);
     markers::init_routes(cfg);
+    routines::init_routes(cfg);
 }
