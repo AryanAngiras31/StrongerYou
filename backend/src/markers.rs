@@ -116,7 +116,7 @@ async fn create_marker(pool: web::Data<PgPool>, marker: web::Json<MarkerCreate>)
         .await
     {
         Ok(row) => {
-            let marker_id: i32 = row.get("MarkerID");
+            let marker_id: i32 = row.get("markerid");
             info!("Created new marker: {} with ID {}", marker.name, marker_id);
             HttpResponse::Created().json(json!({ "marker_id": marker_id }))
         }
