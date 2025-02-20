@@ -284,11 +284,18 @@ async fn get_marker_analytics(
         .fetch_one(pool.get_ref())
         .await
     {
-        Ok(row) => {
-            let result: f64 = row.get("result");
-            info!("Calculated {} for marker {}", metric, marker_id);
-            HttpResponse::Ok().json(json!({ "result": result }))
-        }
+        Ok(row) => match metric {
+            MetricType::Sum => {
+                let result: f32 = row.get("result");
+                info!("Calculated {} for marker {}", metric, marker_id);
+                HttpResponse::Ok().json(json!({ "sum": result }))
+            }
+            MetricType::Average => {
+                let result: f64 = row.get("result");
+                info!("Calculated {} for marker {}", metric, marker_id);
+                HttpResponse::Ok().json(json!({ "average": result }))
+            }
+        },
         Err(e) => {
             error!("Failed to calculate analytics: {}", e);
             HttpResponse::InternalServerError().json(json!({
