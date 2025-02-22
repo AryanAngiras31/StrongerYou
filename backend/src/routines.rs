@@ -49,8 +49,8 @@ struct RoutineExerciseDetail {
 
 #[derive(Serialize, FromRow)]
 struct SetDetail {
-    weight: i32,
-    reps: i32,
+    weight: i16,
+    reps: i16,
 }
 
 #[derive(Serialize, FromRow)]
@@ -73,7 +73,8 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .service(create_routine)
         .service(update_routine)
         .service(delete_routine)
-        .service(list_routines);
+        .service(list_routines)
+        .service(view_routine);
 }
 
 #[get("/routines")]
@@ -419,7 +420,7 @@ async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> Ht
 
     // Fetch routine details
     let routine = match sqlx::query!(
-        r#"SELECT RoutineID, RoutineName, Timestamp FROM Routines WHERE RoutineID = $1"#,
+        r#"SELECT RoutineID as routine_id, RoutineName as routine_name, Timestamp FROM Routines WHERE RoutineID = $1"#,
         routine_id
     )
     .fetch_one(pool.get_ref())
@@ -437,14 +438,14 @@ async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> Ht
     // Fetch exercises and their sets for the routine
     let exercises = match sqlx::query!(
         r#"
-        SELECT e.ExerciseID, e.ExerciseName, s.SetID, s.Weight, s.Reps
+        SELECT e.ExerciseID as exercise_id, e.ExerciseName as exercise_name, s.Weight, s.Reps
         FROM Routines_Exercises_Sets res
         JOIN ExerciseList e ON res.ExerciseID = e.ExerciseID
         LEFT JOIN "Set" s ON res.RoutineID = s.SetID
         WHERE res.RoutineID = $1
         ORDER BY e.ExerciseID, s.SetID
         "#,
-        routine_id
+        routine_id as i16
     )
     .fetch_all(pool.get_ref())
     .await
@@ -456,8 +457,8 @@ async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> Ht
                 let exercise_id = row.exercise_id;
                 let exercise_name = row.exercise_name;
                 let set = SetDetail {
-                    weight: row.weight.unwrap_or(0), // Default to 0 if weight is NULL
-                    reps: row.reps.unwrap_or(0),     // Default to 0 if reps is NULL
+                    weight: row.weight, // Use unwrap_or for Option<i16>
+                    reps: row.reps,     // Use unwrap_or for Option<i16>
                 };
 
                 exercises_map
