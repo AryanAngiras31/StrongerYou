@@ -54,8 +54,7 @@ async fn main() -> std::io::Result<()> {
             RoutineID SERIAL PRIMARY KEY,
             RoutineName VARCHAR(255) NOT NULL,
             Timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UserID SMALLINT REFERENCES Users(UserID),
-            ExerciseList TEXT[] NOT NULL
+            UserID SMALLINT REFERENCES Users(UserID)
         );      
         "#,
     )

@@ -52,8 +52,7 @@ struct RoutineExerciseDetail {
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(get_routine_by_id)
-        .service(get_routine_by_name)
+    cfg.service(get_routine_by_name)
         .service(create_routine)
         .service(update_routine)
         .service(delete_routine)
@@ -102,69 +101,6 @@ async fn list_routines(
             }))
         }
     }
-}
-
-#[get("/routines/{routine_id}")]
-async fn get_routine_by_id(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> HttpResponse {
-    let routine_id = routine_id.into_inner();
-
-    // Get routine details
-    let routine = match sqlx::query(
-        "SELECT r.RoutineID, r.RoutineName, r.ExerciseList, r.Timestamp 
-         FROM Routines r WHERE r.RoutineID = $1",
-    )
-    .bind(routine_id)
-    .fetch_one(pool.get_ref())
-    .await
-    {
-        Ok(row) => row,
-        Err(e) => {
-            error!("Failed to fetch routine details: {}", e);
-            return HttpResponse::NotFound().json(json!({
-                "error": format!("Routine with ID {} not found", routine_id)
-            }));
-        }
-    };
-
-    // Get exercises for this routine
-    let exercises = match sqlx::query(
-        "SELECT re.ExerciseID, e.ExerciseName, re.NumberOfSets as sets
-         FROM Routines_Exercises_Sets re
-         JOIN ExerciseList e ON re.ExerciseID = e.ExerciseID
-         WHERE re.RoutineID = $1",
-    )
-    .bind(routine_id)
-    .fetch_all(pool.get_ref())
-    .await
-    {
-        Ok(rows) => {
-            let exercises: Vec<RoutineExerciseDetail> = rows
-                .iter()
-                .map(|row| RoutineExerciseDetail {
-                    exercise_id: row.get("exerciseid"),
-                    exercise_name: row.get("exercisename"),
-                    sets: row.get("sets"),
-                })
-                .collect();
-            exercises
-        }
-        Err(e) => {
-            error!("Failed to fetch routine exercises: {}", e);
-            return HttpResponse::InternalServerError().json(json!({
-                "error": "Failed to fetch routine exercises"
-            }));
-        }
-    };
-
-    let routine_detail = RoutineDetail {
-        routine_id: routine.get("routineid"),
-        name: routine.get("routinename"),
-        exercise_list: routine.get("exerciselist"),
-        timestamp: routine.get("timestamp"),
-        exercises,
-    };
-
-    HttpResponse::Ok().json(routine_detail)
 }
 
 #[get("/routines/name")]
