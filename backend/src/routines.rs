@@ -47,25 +47,17 @@ struct RoutineExerciseDetail {
     sets: i32,
 }
 
-#[derive(Serialize, FromRow)]
-struct SetDetail {
-    weight: i16,
-    reps: i16,
-}
-
-#[derive(Serialize, FromRow)]
-struct ExerciseDetail {
-    exercise_id: i32,
-    exercise_name: String,
-    sets: Vec<SetDetail>,
-}
-
 #[derive(Serialize)]
 struct RoutineViewResponse {
     routine_id: i32,
-    name: String,
-    timestamp: NaiveDateTime,
-    exercises: Vec<ExerciseDetail>,
+    routine_name: String,
+    routines: Vec<ExerciseSetPair>,
+}
+
+#[derive(Serialize)]
+struct ExerciseSetPair {
+    exercise_id: i32,
+    num_sets: i32,
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
@@ -420,7 +412,7 @@ async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> Ht
 
     // Fetch routine details
     let routine = match sqlx::query!(
-        r#"SELECT RoutineID as routine_id, RoutineName as routine_name, Timestamp FROM Routines WHERE RoutineID = $1"#,
+        r#"SELECT RoutineID as routine_id, RoutineName as routine_name FROM Routines WHERE RoutineID = $1"#,
         routine_id
     )
     .fetch_one(pool.get_ref())
@@ -435,15 +427,15 @@ async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> Ht
         }
     };
 
-    // Fetch exercises and their sets for the routine
-    let exercises = match sqlx::query!(
+    // Fetch exercises and their number of sets for the routine
+    let routines = match sqlx::query!(
         r#"
-        SELECT e.ExerciseID as exercise_id, e.ExerciseName as exercise_name, s.Weight, s.Reps
+        SELECT res.ExerciseID as exercise_id, COUNT(s.SetID) as num_sets
         FROM Routines_Exercises_Sets res
-        JOIN ExerciseList e ON res.ExerciseID = e.ExerciseID
         LEFT JOIN "Set" s ON res.RoutineID = s.SetID
         WHERE res.RoutineID = $1
-        ORDER BY e.ExerciseID, s.SetID
+        GROUP BY res.ExerciseID
+        ORDER BY res.ExerciseID
         "#,
         routine_id as i16
     )
@@ -451,28 +443,12 @@ async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> Ht
     .await
     {
         Ok(rows) => {
-            let mut exercises_map: HashMap<i32, ExerciseDetail> = HashMap::new();
-
-            for row in rows {
-                let exercise_id = row.exercise_id;
-                let exercise_name = row.exercise_name;
-                let set = SetDetail {
-                    weight: row.weight, // Use unwrap_or for Option<i16>
-                    reps: row.reps,     // Use unwrap_or for Option<i16>
-                };
-
-                exercises_map
-                    .entry(exercise_id)
-                    .or_insert(ExerciseDetail {
-                        exercise_id,
-                        exercise_name,
-                        sets: Vec::new(),
-                    })
-                    .sets
-                    .push(set);
-            }
-
-            exercises_map.into_values().collect::<Vec<ExerciseDetail>>()
+            rows.into_iter()
+                .map(|row| ExerciseSetPair {
+                    exercise_id: row.exercise_id as i32,
+                    num_sets: row.num_sets.unwrap_or(0) as i32, // Handle NULL values
+                })
+                .collect::<Vec<ExerciseSetPair>>()
         }
         Err(e) => {
             error!("Failed to fetch exercises and sets: {}", e);
@@ -485,9 +461,8 @@ async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> Ht
     // Construct the response
     let response = RoutineViewResponse {
         routine_id: routine.routine_id,
-        name: routine.routine_name,
-        timestamp: routine.timestamp,
-        exercises,
+        routine_name: routine.routine_name,
+        routines,
     };
 
     info!("Retrieved details for routine {}", routine_id);
