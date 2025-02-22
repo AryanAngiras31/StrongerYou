@@ -9,14 +9,12 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize)]
 struct RoutineCreate {
     name: String,
-    exercise_list: Vec<String>,
     exercises: Vec<RoutineExercise>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct RoutineUpdate {
     name: String,
-    exercise_list: Vec<String>,
     exercises: Vec<RoutineExercise>,
 }
 
@@ -30,7 +28,6 @@ struct RoutineExercise {
 struct RoutineInfo {
     routine_id: i32,
     name: String,
-    exercise_list: Vec<String>,
     timestamp: NaiveDateTime,
     last_performed: Option<NaiveDate>,
 }
@@ -39,7 +36,6 @@ struct RoutineInfo {
 struct RoutineDetail {
     routine_id: i32,
     name: String,
-    exercise_list: Vec<String>,
     timestamp: NaiveDateTime,
     exercises: Vec<RoutineExerciseDetail>,
 }
@@ -69,11 +65,11 @@ async fn list_routines(
 
     // Query to get routines with optional last performed date
     let query = if include_last_performed {
-        "SELECT r.RoutineID, r.RoutineName, r.ExerciseList, r.Timestamp, 
+        "SELECT r.RoutineID, r.RoutineName, r.Timestamp, 
          (SELECT MAX(w.Start::date) FROM Workout w WHERE w.RoutineID = r.RoutineID) as last_performed
          FROM Routines r ORDER BY r.Timestamp ASC"
     } else {
-        "SELECT r.RoutineID, r.RoutineName, r.ExerciseList, r.Timestamp,
+        "SELECT r.RoutineID, r.RoutineName, r.Timestamp,
          NULL as last_performed
          FROM Routines r ORDER BY r.Timestamp ASC"
     };
@@ -85,7 +81,6 @@ async fn list_routines(
                 .map(|row| RoutineInfo {
                     routine_id: row.get("routineid"),
                     name: row.get("routinename"),
-                    exercise_list: row.get("exerciselist"),
                     timestamp: row.get("timestamp"),
                     last_performed: row.get("last_performed"),
                 })
@@ -170,11 +165,10 @@ async fn create_routine(
 
     // Insert into Routines table
     let routine_id = match sqlx::query(
-        "INSERT INTO Routines (RoutineName, ExerciseList, Timestamp) 
-         VALUES ($1, $2, $3) RETURNING RoutineID",
+        "INSERT INTO Routines (RoutineName, Timestamp) 
+         VALUES ($1, $2) RETURNING RoutineID",
     )
     .bind(&routine.name)
-    .bind(&routine.exercise_list)
     .bind(Utc::now().naive_utc())
     .fetch_one(&mut *tx)
     .await
@@ -274,13 +268,11 @@ async fn update_routine(
     };
 
     // Update Routines table
-    if let Err(e) =
-        sqlx::query("UPDATE Routines SET RoutineName = $1, ExerciseList = $2 WHERE RoutineID = $3")
-            .bind(&update.name)
-            .bind(&update.exercise_list)
-            .bind(routine_id)
-            .execute(&mut *tx)
-            .await
+    if let Err(e) = sqlx::query("UPDATE Routines SET RoutineName = $1 WHERE RoutineID = $2")
+        .bind(&update.name)
+        .bind(routine_id)
+        .execute(&mut *tx)
+        .await
     {
         error!("Failed to update Routines table: {}", e);
         let _ = tx.rollback().await;
