@@ -32,14 +32,6 @@ struct RoutineInfo {
     last_performed: Option<NaiveDate>,
 }
 
-#[derive(Serialize)]
-struct RoutineDetail {
-    routine_id: i32,
-    name: String,
-    timestamp: NaiveDateTime,
-    exercises: Vec<RoutineExerciseDetail>,
-}
-
 #[derive(Serialize, FromRow)]
 struct RoutineExerciseDetail {
     exercise_id: i32,
