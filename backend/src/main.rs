@@ -12,6 +12,7 @@ use std::fs;
 mod exercises;
 mod markers;
 mod routines;
+mod workouts;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -252,4 +253,5 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
     exercises::init_routes(cfg);
     markers::init_routes(cfg);
     routines::init_routes(cfg);
+    workouts::init_routes(cfg);
 }
