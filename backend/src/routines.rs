@@ -47,6 +47,27 @@ struct RoutineExerciseDetail {
     sets: i32,
 }
 
+#[derive(Serialize, FromRow)]
+struct SetDetail {
+    weight: i32,
+    reps: i32,
+}
+
+#[derive(Serialize, FromRow)]
+struct ExerciseDetail {
+    exercise_id: i32,
+    exercise_name: String,
+    sets: Vec<SetDetail>,
+}
+
+#[derive(Serialize)]
+struct RoutineViewResponse {
+    routine_id: i32,
+    name: String,
+    timestamp: NaiveDateTime,
+    exercises: Vec<ExerciseDetail>,
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(get_routine_by_name)
         .service(create_routine)
@@ -390,4 +411,84 @@ async fn delete_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> 
 
     info!("Deleted routine {}", routine_id);
     HttpResponse::Ok().json(json!({ "status": "deleted" }))
+}
+
+#[get("/routines/{routine_id}")]
+async fn view_routine(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> HttpResponse {
+    let routine_id = routine_id.into_inner();
+
+    // Fetch routine details
+    let routine = match sqlx::query!(
+        r#"SELECT RoutineID, RoutineName, Timestamp FROM Routines WHERE RoutineID = $1"#,
+        routine_id
+    )
+    .fetch_one(pool.get_ref())
+    .await
+    {
+        Ok(row) => row,
+        Err(e) => {
+            error!("Failed to fetch routine details: {}", e);
+            return HttpResponse::NotFound().json(json!({
+                "error": format!("Routine with ID {} not found", routine_id)
+            }));
+        }
+    };
+
+    // Fetch exercises and their sets for the routine
+    let exercises = match sqlx::query!(
+        r#"
+        SELECT e.ExerciseID, e.ExerciseName, s.SetID, s.Weight, s.Reps
+        FROM Routines_Exercises_Sets res
+        JOIN ExerciseList e ON res.ExerciseID = e.ExerciseID
+        LEFT JOIN "Set" s ON res.RoutineID = s.SetID
+        WHERE res.RoutineID = $1
+        ORDER BY e.ExerciseID, s.SetID
+        "#,
+        routine_id
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    {
+        Ok(rows) => {
+            let mut exercises_map: HashMap<i32, ExerciseDetail> = HashMap::new();
+
+            for row in rows {
+                let exercise_id = row.exercise_id;
+                let exercise_name = row.exercise_name;
+                let set = SetDetail {
+                    weight: row.weight.unwrap_or(0), // Default to 0 if weight is NULL
+                    reps: row.reps.unwrap_or(0),     // Default to 0 if reps is NULL
+                };
+
+                exercises_map
+                    .entry(exercise_id)
+                    .or_insert(ExerciseDetail {
+                        exercise_id,
+                        exercise_name,
+                        sets: Vec::new(),
+                    })
+                    .sets
+                    .push(set);
+            }
+
+            exercises_map.into_values().collect::<Vec<ExerciseDetail>>()
+        }
+        Err(e) => {
+            error!("Failed to fetch exercises and sets: {}", e);
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch routine exercises and sets"
+            }));
+        }
+    };
+
+    // Construct the response
+    let response = RoutineViewResponse {
+        routine_id: routine.routine_id,
+        name: routine.routine_name,
+        timestamp: routine.timestamp,
+        exercises,
+    };
+
+    info!("Retrieved details for routine {}", routine_id);
+    HttpResponse::Ok().json(response)
 }
