@@ -37,11 +37,31 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 async fn get_workout_template(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> HttpResponse {
     let routine_id = routine_id.into_inner();
 
+    // First verify the routine exists
+    match sqlx::query("SELECT routineid FROM Routines WHERE routineid = $1")
+        .bind(routine_id)
+        .fetch_optional(pool.get_ref())
+        .await
+    {
+        Ok(None) => {
+            return HttpResponse::NotFound().json(json!({
+                "error": format!("Routine with ID {} not found", routine_id)
+            }));
+        }
+        Err(e) => {
+            error!("Database error: {}", e);
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "Internal server error"
+            }));
+        }
+        Ok(Some(_)) => {}
+    }
+
     match sqlx::query(
-        r#"SELECT e.ExerciseID, e.ExerciseName, r.NumberOfSets 
+        r#"SELECT e.exerciseid, e.exercisename, r.numberofsets 
          FROM ExerciseList e
-         JOIN Routines_Exercises_Sets r ON e.ExerciseID = r.ExerciseID
-         WHERE r.RoutineID = $1"#,
+         JOIN Routines_Exercises_Sets r ON e.exerciseid = r.exerciseid
+         WHERE r.routineid = $1"#,
     )
     .bind(routine_id)
     .fetch_all(pool.get_ref())
@@ -51,7 +71,7 @@ async fn get_workout_template(pool: web::Data<PgPool>, routine_id: web::Path<i32
             let exercises: Vec<Exercise> = rows
                 .iter()
                 .map(|row| {
-                    let number_of_sets: i16 = row.get("NumberOfSets");
+                    let number_of_sets: i16 = row.get("numberofsets");
                     let mut sets = HashMap::new();
 
                     for set_num in 1..=number_of_sets {
@@ -59,8 +79,8 @@ async fn get_workout_template(pool: web::Data<PgPool>, routine_id: web::Path<i32
                     }
 
                     Exercise {
-                        exercise_id: row.get("ExerciseID"),
-                        exercise_name: row.get("ExerciseName"),
+                        exercise_id: row.get("exerciseid"),
+                        exercise_name: row.get("exercisename"),
                         sets,
                     }
                 })
@@ -112,9 +132,9 @@ async fn update_prs(
         .fold(0.0, f32::max);
 
     let pr_id: i32 = sqlx::query(
-        "INSERT INTO PRs (HeaviestWeight, OneRM, SetVolume, ExerciseID, WorkoutID)
+        "INSERT INTO PRs (heaviestweight, onerm, setvolume, exerciseid, workoutid)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING PRID",
+         RETURNING prid",
     )
     .bind(heaviest_weight)
     .bind(one_rm)
@@ -123,15 +143,15 @@ async fn update_prs(
     .bind(workout_id)
     .fetch_one(pool)
     .await?
-    .get("PRID");
+    .get("prid");
 
     for (weight, reps) in highest_reps_map {
         sqlx::query(
-            "INSERT INTO HighestRepsPerWeight (Weight, HighestReps, ExerciseID, PRID)
+            "INSERT INTO HighestRepsPerWeight (weight, highestreps, exerciseid, prid)
              VALUES ($1, $2, $3, $4)
-             ON CONFLICT (ExerciseID, Weight)
-             DO UPDATE SET HighestReps = EXCLUDED.HighestReps, PRID = EXCLUDED.PRID
-             WHERE HighestRepsPerWeight.HighestReps < EXCLUDED.HighestReps",
+             ON CONFLICT (exerciseid, weight)
+             DO UPDATE SET highestreps = EXCLUDED.highestreps, prid = EXCLUDED.prid
+             WHERE HighestRepsPerWeight.highestreps < EXCLUDED.highestreps",
         )
         .bind(weight)
         .bind(reps)
@@ -144,41 +164,59 @@ async fn update_prs(
     Ok(())
 }
 
+async fn validate_routine_id(pool: &PgPool, routine_id: i32) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query("SELECT routineid FROM Routines WHERE routineid = $1")
+        .bind(routine_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(result.is_some())
+}
+
 async fn save_workout_data(
     pool: &PgPool,
     workout_data: &WorkoutData,
     workout_id: Option<i32>,
 ) -> Result<i32, sqlx::Error> {
+    // Validate routine_id if provided
+    if let Some(routine_id) = workout_data.routine_id {
+        if !validate_routine_id(pool, routine_id).await? {
+            return Err(sqlx::Error::Protocol(format!(
+                "Routine with ID {} does not exist",
+                routine_id
+            )));
+        }
+    }
+
     let workout_id = match workout_id {
         Some(id) => id,
         None => sqlx::query(
-            r#"INSERT INTO Workout (Start, "End", RoutineID)
+            r#"INSERT INTO Workout (start, "end", routineid)
                  VALUES ($1, $2, $3)
-                 RETURNING WorkoutID"#,
+                 RETURNING workoutid"#,
         )
         .bind(workout_data.start_time)
         .bind(workout_data.end_time)
         .bind(workout_data.routine_id)
         .fetch_one(pool)
         .await?
-        .get("WorkoutID"),
+        .get("workoutid"),
     };
 
     for exercise in &workout_data.exercises {
         for (set_number, set) in &exercise.sets {
             let set_id: i32 = sqlx::query(
-                r#"INSERT INTO "Set" (Weight, Reps)
+                r#"INSERT INTO "Set" (weight, reps)
                  VALUES ($1, $2)
-                 RETURNING SetID"#,
+                 RETURNING setid"#,
             )
             .bind(set.weight)
             .bind(set.reps)
             .fetch_one(pool)
             .await?
-            .get("SetID");
+            .get("setid");
 
             sqlx::query(
-                "INSERT INTO Workout_Exercises_Sets (WorkoutID, ExerciseID, SetID)
+                "INSERT INTO Workout_Exercises_Sets (workoutid, exerciseid, setid)
                  VALUES ($1, $2, $3)",
             )
             .bind(workout_id)
@@ -210,7 +248,7 @@ async fn modify_workout(
         Err(e) => {
             error!("Failed to update workout: {}", e);
             HttpResponse::InternalServerError().json(json!({
-                "error": "Failed to update workout"
+                "error": format!("Failed to update workout: {}", e)
             }))
         }
     }
@@ -228,9 +266,15 @@ async fn finish_workout(
         }
         Err(e) => {
             error!("Failed to create workout: {}", e);
-            HttpResponse::InternalServerError().json(json!({
-                "error": "Failed to create workout"
-            }))
+            if e.to_string().contains("does not exist") {
+                HttpResponse::BadRequest().json(json!({
+                    "error": e.to_string()
+                }))
+            } else {
+                HttpResponse::InternalServerError().json(json!({
+                    "error": format!("Failed to create workout: {}", e)
+                }))
+            }
         }
     }
 }
