@@ -37,12 +37,11 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 async fn get_workout_template(pool: web::Data<PgPool>, routine_id: web::Path<i32>) -> HttpResponse {
     let routine_id = routine_id.into_inner();
 
-    // Query to get exercises and their set counts from the routine
     match sqlx::query(
-        "SELECT e.ExerciseID, e.ExerciseName, r.NumberOfSets 
+        r#"SELECT e.ExerciseID, e.ExerciseName, r.NumberOfSets 
          FROM ExerciseList e
          JOIN Routines_Exercises_Sets r ON e.ExerciseID = r.ExerciseID
-         WHERE r.RoutineID = $1",
+         WHERE r.RoutineID = $1"#,
     )
     .bind(routine_id)
     .fetch_all(pool.get_ref())
@@ -55,7 +54,6 @@ async fn get_workout_template(pool: web::Data<PgPool>, routine_id: web::Path<i32
                     let number_of_sets: i16 = row.get("NumberOfSets");
                     let mut sets = HashMap::new();
 
-                    // Initialize empty sets
                     for set_num in 1..=number_of_sets {
                         sets.insert(set_num, Set { weight: 0, reps: 0 });
                     }
@@ -86,29 +84,23 @@ async fn update_prs(
     workout_id: i32,
     exercise: &Exercise,
 ) -> Result<(), sqlx::Error> {
-    // Calculate potential PRs
     let mut heaviest_weight = 0i16;
     let mut highest_volume = 0i32;
     let mut highest_reps_map: HashMap<i16, i16> = HashMap::new();
 
-    // Process each set
     for (_, set) in &exercise.sets {
-        // Update heaviest weight
         if set.weight > heaviest_weight {
             heaviest_weight = set.weight;
         }
 
-        // Update volume
         highest_volume += i32::from(set.weight) * i32::from(set.reps);
 
-        // Update highest reps for each weight
         let current_highest = highest_reps_map.entry(set.weight).or_insert(0);
         if set.reps > *current_highest {
             *current_highest = set.reps;
         }
     }
 
-    // Calculate estimated 1RM using Brzycki formula
     let one_rm = exercise
         .sets
         .values()
@@ -119,7 +111,6 @@ async fn update_prs(
         })
         .fold(0.0, f32::max);
 
-    // Insert new PR record
     let pr_id: i32 = sqlx::query(
         "INSERT INTO PRs (HeaviestWeight, OneRM, SetVolume, ExerciseID, WorkoutID)
          VALUES ($1, $2, $3, $4, $5)
@@ -134,7 +125,6 @@ async fn update_prs(
     .await?
     .get("PRID");
 
-    // Update HighestRepsPerWeight
     for (weight, reps) in highest_reps_map {
         sqlx::query(
             "INSERT INTO HighestRepsPerWeight (Weight, HighestReps, ExerciseID, PRID)
@@ -161,30 +151,25 @@ async fn save_workout_data(
 ) -> Result<i32, sqlx::Error> {
     let workout_id = match workout_id {
         Some(id) => id,
-        None => {
-            // Create new workout
-            sqlx::query(
-                "INSERT INTO Workout (Start, End, RoutineID)
+        None => sqlx::query(
+            r#"INSERT INTO Workout (Start, "End", RoutineID)
                  VALUES ($1, $2, $3)
-                 RETURNING WorkoutID",
-            )
-            .bind(workout_data.start_time)
-            .bind(workout_data.end_time)
-            .bind(workout_data.routine_id)
-            .fetch_one(pool)
-            .await?
-            .get("WorkoutID")
-        }
+                 RETURNING WorkoutID"#,
+        )
+        .bind(workout_data.start_time)
+        .bind(workout_data.end_time)
+        .bind(workout_data.routine_id)
+        .fetch_one(pool)
+        .await?
+        .get("WorkoutID"),
     };
 
-    // Save exercises and sets
     for exercise in &workout_data.exercises {
         for (set_number, set) in &exercise.sets {
-            // Insert set
             let set_id: i32 = sqlx::query(
-                "INSERT INTO Set (Weight, Reps)
+                r#"INSERT INTO "Set" (Weight, Reps)
                  VALUES ($1, $2)
-                 RETURNING SetID",
+                 RETURNING SetID"#,
             )
             .bind(set.weight)
             .bind(set.reps)
@@ -192,7 +177,6 @@ async fn save_workout_data(
             .await?
             .get("SetID");
 
-            // Link workout, exercise, and set
             sqlx::query(
                 "INSERT INTO Workout_Exercises_Sets (WorkoutID, ExerciseID, SetID)
                  VALUES ($1, $2, $3)",
@@ -204,7 +188,6 @@ async fn save_workout_data(
             .await?;
         }
 
-        // Update PRs for this exercise
         update_prs(pool, workout_id, exercise).await?;
     }
 
