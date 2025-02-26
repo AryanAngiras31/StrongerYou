@@ -409,7 +409,7 @@ async fn save_workout_data(
     };
 
     for exercise in &workout_data.exercises {
-        for (set_number, set) in &exercise.sets {
+        for (_set_number, set) in &exercise.sets {
             let set_id: i32 = sqlx::query(
                 r#"INSERT INTO "Set" (weight, reps)
                  VALUES ($1, $2)
