@@ -172,13 +172,14 @@ async fn view_workout(pool: web::Data<PgPool>, workout_id: web::Path<i32>) -> Ht
 
     let workout_data = sqlx::query(
         r#"SELECT w.routineid, r.routinename, e.exerciseid, e.exercisename, 
-           s.weight, s.reps, wes.setnumber
+           s.weight, s.reps, wes.setid
          FROM Workout w
          JOIN Workout_Exercises_Sets wes ON w.workoutid = wes.workoutid
          JOIN ExerciseList e ON wes.exerciseid = e.exerciseid
          JOIN "Set" s ON wes.setid = s.setid
          LEFT JOIN Routines r ON w.routineid = r.routineid
-         WHERE w.workoutid = $1"#,
+         WHERE w.workoutid = $1
+         ORDER BY e.exerciseid, s.setid"#, // Added ordering to keep sets in order
     )
     .bind(workout_id)
     .fetch_all(pool.get_ref())
@@ -186,11 +187,23 @@ async fn view_workout(pool: web::Data<PgPool>, workout_id: web::Path<i32>) -> Ht
 
     match workout_data {
         Ok(rows) => {
-            let mut exercises_map: HashMap<i32, Exercise> = HashMap::new();
-            let mut routine_name = String::new();
+            if rows.is_empty() {
+                return HttpResponse::NotFound().json(json!({
+                    "error": format!("Workout with ID {} not found", workout_id)
+                }));
+            }
 
-            for row in rows {
-                routine_name = row.get("routinename");
+            let mut exercises_map: HashMap<i32, Exercise> = HashMap::new();
+            let mut routine_id: Option<i32> = None;
+            let mut routine_name: Option<String> = None;
+
+            // Keep track of set count for each exercise
+            let mut exercise_set_counter: HashMap<i32, i16> = HashMap::new();
+
+            for row in &rows {
+                routine_id = row.try_get("routineid").ok();
+                routine_name = row.try_get("routinename").ok();
+
                 let exercise_id: i32 = row.get("exerciseid");
                 let exercise = exercises_map.entry(exercise_id).or_insert(Exercise {
                     exercise_id,
@@ -198,9 +211,12 @@ async fn view_workout(pool: web::Data<PgPool>, workout_id: web::Path<i32>) -> Ht
                     sets: HashMap::new(),
                 });
 
-                let set_number: i16 = row.get("setnumber");
+                // Increment set number for this exercise
+                let set_number = exercise_set_counter.entry(exercise_id).or_insert(0);
+                *set_number += 1;
+
                 exercise.sets.insert(
-                    set_number,
+                    *set_number,
                     Set {
                         weight: row.get("weight"),
                         reps: row.get("reps"),
@@ -209,6 +225,7 @@ async fn view_workout(pool: web::Data<PgPool>, workout_id: web::Path<i32>) -> Ht
             }
 
             HttpResponse::Ok().json(json!({
+                "routine_id": routine_id,
                 "routine_name": routine_name,
                 "exercises": exercises_map.values().collect::<Vec<_>>()
             }))
@@ -216,7 +233,7 @@ async fn view_workout(pool: web::Data<PgPool>, workout_id: web::Path<i32>) -> Ht
         Err(e) => {
             error!("Failed to fetch workout details: {}", e);
             HttpResponse::InternalServerError().json(json!({
-                "error": "Failed to fetch workout details"
+                "error": format!("Failed to fetch workout details: {}", e)
             }))
         }
     }
