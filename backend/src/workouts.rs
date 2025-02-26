@@ -27,10 +27,192 @@ struct WorkoutData {
     routine_id: Option<i32>,
 }
 
+#[derive(Deserialize)]
+struct ValidateSetData {
+    exercise_id: i32,
+    weight: i16,
+    reps: i16,
+}
+
+#[derive(Serialize)]
+struct WorkoutSummary {
+    workout_id: i32,
+    routine_name: String,
+    start_time: NaiveDateTime,
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(get_workout_template)
         .service(modify_workout)
-        .service(finish_workout);
+        .service(finish_workout)
+        .service(validate_set)
+        .service(display_workouts)
+        .service(view_workout);
+}
+
+#[post("/workouts/validate")]
+async fn validate_set(
+    pool: web::Data<PgPool>,
+    set_data: web::Json<ValidateSetData>,
+) -> HttpResponse {
+    let mut new_prs = HashMap::new();
+
+    // Calculate 1RM using the formula
+    let one_rm = f32::from(set_data.weight) * (36.0 / (37.0 - f32::from(set_data.reps)));
+    let set_volume = i32::from(set_data.weight) * i32::from(set_data.reps);
+
+    // Check PRs
+    match sqlx::query(
+        "SELECT heaviestweight, onerm, setvolume FROM PRs 
+         WHERE exerciseid = $1 
+         ORDER BY prid DESC LIMIT 1",
+    )
+    .bind(set_data.exercise_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    {
+        Ok(maybe_pr) => {
+            if let Some(pr) = maybe_pr {
+                let current_heaviest: i16 = pr.get("heaviestweight");
+                let current_one_rm: f32 = pr.get("onerm");
+                let current_volume: i32 = pr.get("setvolume");
+
+                if set_data.weight > current_heaviest {
+                    new_prs.insert("HeaviestWeight", set_data.weight);
+                }
+                if one_rm > current_one_rm {
+                    new_prs.insert("OneRM", one_rm);
+                }
+                if set_volume > current_volume {
+                    new_prs.insert("SetVolume", set_volume);
+                }
+            }
+        }
+        Err(e) => {
+            error!("Database error checking PRs: {}", e);
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to check PRs"
+            }));
+        }
+    }
+
+    // Check HighestRepsPerWeight
+    match sqlx::query(
+        "SELECT highestreps FROM HighestRepsPerWeight 
+         WHERE exerciseid = $1 AND weight = $2",
+    )
+    .bind(set_data.exercise_id)
+    .bind(set_data.weight)
+    .fetch_optional(pool.get_ref())
+    .await
+    {
+        Ok(maybe_record) => {
+            if let Some(record) = maybe_record {
+                let current_highest_reps: i16 = record.get("highestreps");
+                if set_data.reps > current_highest_reps {
+                    new_prs.insert("HighestReps", set_data.reps);
+                }
+            } else {
+                new_prs.insert("HighestReps", set_data.reps);
+            }
+        }
+        Err(e) => {
+            error!("Database error checking highest reps: {}", e);
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to check highest reps"
+            }));
+        }
+    }
+
+    HttpResponse::Ok().json(new_prs)
+}
+
+#[get("/workouts")]
+async fn display_workouts(pool: web::Data<PgPool>) -> HttpResponse {
+    match sqlx::query(
+        r#"SELECT w.workoutid, w.start, r.routinename 
+         FROM Workout w 
+         LEFT JOIN Routines r ON w.routineid = r.routineid 
+         ORDER BY w.start DESC"#,
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    {
+        Ok(rows) => {
+            let workouts: Vec<WorkoutSummary> = rows
+                .iter()
+                .map(|row| WorkoutSummary {
+                    workout_id: row.get("workoutid"),
+                    routine_name: row.get("routinename"),
+                    start_time: row.get("start"),
+                })
+                .collect();
+
+            HttpResponse::Ok().json(workouts)
+        }
+        Err(e) => {
+            error!("Failed to fetch workouts: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch workouts"
+            }))
+        }
+    }
+}
+
+#[get("/workouts/{workout_id}")]
+async fn view_workout(pool: web::Data<PgPool>, workout_id: web::Path<i32>) -> HttpResponse {
+    let workout_id = workout_id.into_inner();
+
+    let workout_data = sqlx::query(
+        r#"SELECT w.routineid, r.routinename, e.exerciseid, e.exercisename, 
+           s.weight, s.reps, wes.setnumber
+         FROM Workout w
+         JOIN Workout_Exercises_Sets wes ON w.workoutid = wes.workoutid
+         JOIN ExerciseList e ON wes.exerciseid = e.exerciseid
+         JOIN "Set" s ON wes.setid = s.setid
+         LEFT JOIN Routines r ON w.routineid = r.routineid
+         WHERE w.workoutid = $1"#,
+    )
+    .bind(workout_id)
+    .fetch_all(pool.get_ref())
+    .await;
+
+    match workout_data {
+        Ok(rows) => {
+            let mut exercises_map: HashMap<i32, Exercise> = HashMap::new();
+            let mut routine_name = String::new();
+
+            for row in rows {
+                routine_name = row.get("routinename");
+                let exercise_id: i32 = row.get("exerciseid");
+                let exercise = exercises_map.entry(exercise_id).or_insert(Exercise {
+                    exercise_id,
+                    exercise_name: row.get("exercisename"),
+                    sets: HashMap::new(),
+                });
+
+                let set_number: i16 = row.get("setnumber");
+                exercise.sets.insert(
+                    set_number,
+                    Set {
+                        weight: row.get("weight"),
+                        reps: row.get("reps"),
+                    },
+                );
+            }
+
+            HttpResponse::Ok().json(json!({
+                "routine_name": routine_name,
+                "exercises": exercises_map.values().collect::<Vec<_>>()
+            }))
+        }
+        Err(e) => {
+            error!("Failed to fetch workout details: {}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch workout details"
+            }))
+        }
+    }
 }
 
 #[get("/workouts/template/{routine_id}")]
