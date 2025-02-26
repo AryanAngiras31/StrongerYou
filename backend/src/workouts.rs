@@ -41,6 +41,14 @@ struct WorkoutSummary {
     start_time: NaiveDateTime,
 }
 
+#[derive(Serialize)]
+enum PRValue {
+    Weight(i16),
+    OneRM(f32),
+    Volume(i32),
+    Reps(i16),
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(get_workout_template)
         .service(modify_workout)
@@ -55,7 +63,7 @@ async fn validate_set(
     pool: web::Data<PgPool>,
     set_data: web::Json<ValidateSetData>,
 ) -> HttpResponse {
-    let mut new_prs = HashMap::new();
+    let mut new_prs: HashMap<&str, PRValue> = HashMap::new();
 
     // Calculate 1RM using the formula
     let one_rm = f32::from(set_data.weight) * (36.0 / (37.0 - f32::from(set_data.reps)));
@@ -78,13 +86,13 @@ async fn validate_set(
                 let current_volume: i32 = pr.get("setvolume");
 
                 if set_data.weight > current_heaviest {
-                    new_prs.insert("HeaviestWeight", set_data.weight);
+                    new_prs.insert("HeaviestWeight", PRValue::Weight(set_data.weight));
                 }
                 if one_rm > current_one_rm {
-                    new_prs.insert("OneRM", one_rm);
+                    new_prs.insert("OneRM", PRValue::OneRM(one_rm));
                 }
                 if set_volume > current_volume {
-                    new_prs.insert("SetVolume", set_volume);
+                    new_prs.insert("SetVolume", PRValue::Volume(set_volume));
                 }
             }
         }
@@ -110,10 +118,10 @@ async fn validate_set(
             if let Some(record) = maybe_record {
                 let current_highest_reps: i16 = record.get("highestreps");
                 if set_data.reps > current_highest_reps {
-                    new_prs.insert("HighestReps", set_data.reps);
+                    new_prs.insert("HighestReps", PRValue::Reps(set_data.reps));
                 }
             } else {
-                new_prs.insert("HighestReps", set_data.reps);
+                new_prs.insert("HighestReps", PRValue::Reps(set_data.reps));
             }
         }
         Err(e) => {
@@ -126,7 +134,6 @@ async fn validate_set(
 
     HttpResponse::Ok().json(new_prs)
 }
-
 #[get("/workouts")]
 async fn display_workouts(pool: web::Data<PgPool>) -> HttpResponse {
     match sqlx::query(
