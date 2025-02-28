@@ -1,18 +1,22 @@
-# Use the official Rust image for development
-FROM rust:1.72-slim
+FROM rust:latest
 
 # Set the working directory
 WORKDIR /usr/src/app
 
-# Copy the Rust backend source code
-COPY backend/ .
+# Copy the Cargo.toml and Cargo.lock files
+COPY backend/Cargo.toml backend/Cargo.lock ./
 
-# Install dependencies and compile the application in release mode
-RUN cargo build
+# Update Cargo to the latest version
+RUN rustup update stable
 
-# Expose backend server port (e.g., 8080)
-EXPOSE 8080
+# Build the dependencies
+RUN cargo build --release
 
-# Run the application
-CMD ["cargo", "run"]
+# Copy the rest of the application code
+COPY . .
 
+# Build the application
+RUN cargo build --release
+
+# Start the application
+CMD ["./target/release/your_backend_executable"]
