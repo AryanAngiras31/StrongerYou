@@ -12,8 +12,11 @@ RUN npm set registry https://registry.npmjs.org/ && \
     npm set fetch-retry-maxtimeout 120000 && \
     npm install
 
+# Install Ionic CLI globally
+RUN npm install -g @ionic/cli
+
 # Copy the rest of the application code
 COPY . .
 
-# Start the application using npx expo
-CMD ["npx", "expo", "start"]
+# Start the Ionic application
+CMD ["ionic", "serve", "--host", "0.0.0.0"]

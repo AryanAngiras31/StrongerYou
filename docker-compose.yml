@@ -6,9 +6,7 @@ services:
       context: .
       dockerfile: Docker/frontend/Dockerfile
     ports:
-      - "19000:19000"
-      - "19001:19001"
-      - "19002:19002"
+      - "8100:8100" # Default port for Ionic
     volumes:
       - ./frontend:/usr/src/app
     depends_on:
@@ -25,13 +23,17 @@ services:
       - ./backend:/usr/src/app
     depends_on:
       - database
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@database:5432/strongeryou
 
   database:
-    build:
-      context: .
-      dockerfile: Docker/database/Dockerfile
+    image: postgres:13
     ports:
       - "5432:5432"
+    environment:
+      POSTGRES_DB: strongeryou
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
 
