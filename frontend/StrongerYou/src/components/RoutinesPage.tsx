@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { IonContent, IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonIcon, IonRow, IonCol } from '@ionic/react';
+import { IonContent, IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonIcon, IonRow, IonCol, IonToast } from '@ionic/react';
 import { ellipsisVertical } from 'ionicons/icons';
 import './RoutinesPage.css';
 
@@ -14,21 +14,40 @@ const RoutinesPage: React.FC = () => {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [showToast, setShowToast] = useState<boolean>(false);
+  const [detailedError, setDetailedError] = useState<string>('');
 
   useEffect(() => {
     const fetchRoutines = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8080/routines?sort=createdAt&include=lastPerformed');
+        console.log('Fetching routines...');
+        const response = await fetch('http://127.0.0.1:8080/routines?sort=createdAt&include=lastPerformed', {
+          // Adding these options for better debugging
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', [...response.headers.entries()]);
         
         if (!response.ok) {
-          throw new Error('Failed to fetch routines');
+          const errorText = await response.text();
+          console.error('Error response body:', errorText);
+          throw new Error(`Server responded with status: ${response.status}. Details: ${errorText}`);
         }
         
         const data = await response.json();
+        console.log('Received data:', data);
         setRoutines(data);
       } catch (err) {
+        console.error('Full error details:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
         setError('Failed to load routines. Please try again later.');
-        console.error('Error fetching routines:', err);
+        setDetailedError(`Technical details: ${errorMessage}`);
+        setShowToast(true);
       } finally {
         setLoading(false);
       }
@@ -45,6 +64,20 @@ const RoutinesPage: React.FC = () => {
     return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
   };
 
+  // For testing - this lets you see mock data even if the API fails
+  const testWithMockData = () => {
+    setRoutines([
+      {
+        "routine_id": 1,
+        "name": "Morning Routine",
+        "timestamp": "2025-02-26T14:57:16.944294",
+        "last_performed": "2023-10-01"
+      }
+    ]);
+    setLoading(false);
+    setError(null);
+  };
+
   return (
     <IonPage>
       <IonHeader className="ion-no-border">
@@ -57,26 +90,50 @@ const RoutinesPage: React.FC = () => {
         <h1 className="routines-title">Your Routines</h1>
         
         {loading && <p className="loading-text">Loading your routines...</p>}
-        {error && <p className="error-text">{error}</p>}
+        
+        {error && (
+          <div className="error-container">
+            <p className="error-text">{error}</p>
+            <p className="error-details">{detailedError}</p>
+            <IonButton 
+              className="debug-button" 
+              size="small" 
+              onClick={() => console.log('Open console to see detailed error logs')}
+            >
+              View Debug Logs
+            </IonButton>
+            <IonButton 
+              className="mock-data-button" 
+              size="small" 
+              onClick={testWithMockData}
+            >
+              Load Test Data
+            </IonButton>
+          </div>
+        )}
         
         {!loading && !error && (
           <div className="routines-container">
-            {routines.map((routine) => (
-              <div key={routine.routine_id} className="routine-card">
-                <div className="routine-info">
-                  <span className="routine-name">{routine.name}</span>
-                  <span className="last-performed">Last performed {formatDate(routine.last_performed)}</span>
-                </div>
-                <div className="routine-actions">
-                  <IonButton expand="block" className="start-button">
-                    Start
-                  </IonButton>
-                  <div className="more-options">
-                    <IonIcon icon={ellipsisVertical} />
+            {routines.length === 0 ? (
+              <p className="no-routines">No routines found. Create your first routine to get started!</p>
+            ) : (
+              routines.map((routine) => (
+                <div key={routine.routine_id} className="routine-card">
+                  <div className="routine-info">
+                    <span className="routine-name">{routine.name}</span>
+                    <span className="last-performed">Last performed {formatDate(routine.last_performed)}</span>
+                  </div>
+                  <div className="routine-actions">
+                    <IonButton expand="block" className="start-button">
+                      Start
+                    </IonButton>
+                    <div className="more-options">
+                      <IonIcon icon={ellipsisVertical} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
         
@@ -92,6 +149,18 @@ const RoutinesPage: React.FC = () => {
           </div>
         </div>
       </IonContent>
+      
+      <IonToast
+        isOpen={showToast}
+        onDidDismiss={() => setShowToast(false)}
+        message={detailedError}
+        duration={10000}
+        position="bottom"
+        buttons={[{
+          text: 'Dismiss',
+          role: 'cancel'
+        }]}
+      />
     </IonPage>
   );
 };
