@@ -1,0 +1,157 @@
+/* Main app theming */
+:root {
+    --app-background: #111111;
+    --card-background: #222222;
+    --primary-text: #ffffff;
+    --secondary-text: #888888;
+    --accent-color: #1e88e5;
+    --button-color: #87CEFA;
+    --button-text: #000000;
+  }
+  
+  /* Page styles */
+  .app-header {
+    --background: var(--app-background);
+    --color: var(--primary-text);
+    padding-top: 12px;
+  }
+  
+  .app-title {
+    font-weight: 700;
+    font-size: 1.5rem;
+    text-align: left;
+    padding-left: 12px;
+  }
+  
+  ion-content {
+    --background: var(--app-background);
+    --color: var(--primary-text);
+  }
+  
+  .routines-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 20px 0 24px 12px;
+    color: var(--primary-text);
+  }
+  
+  /* Routine cards */
+  .routines-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 70px; /* Space for the navigation bar */
+  }
+  
+  .routine-card {
+    background-color: var(--card-background);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 0 4px;
+  }
+  
+  .routine-info {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+  }
+  
+  .routine-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 6px;
+  }
+  
+  .last-performed {
+    color: var(--secondary-text);
+    font-size: 0.8rem;
+  }
+  
+  .routine-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .start-button {
+    --background: var(--button-color);
+    --color: var(--button-text);
+    --border-radius: 8px;
+    --box-shadow: none;
+    margin: 0;
+    font-weight: 600;
+    text-transform: none;
+    flex: 1;
+  }
+  
+  .more-options {
+    padding: 8px;
+    margin-left: 10px;
+    color: var(--secondary-text);
+  }
+  
+  /* Loading and error states */
+  .loading-text, .error-text {
+    text-align: center;
+    color: var(--secondary-text);
+    margin-top: 40px;
+  }
+  
+  .error-text {
+    color: #ff6b6b;
+  }
+  
+  /* Navigation bar */
+  .navigation-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: var(--app-background);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-top: 1px solid #333;
+    z-index: 1000;
+  }
+  
+  .nav-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    height: 100%;
+  }
+  
+  .nav-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--secondary-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .timer-icon {
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  
+  /* Add placeholder styling for the navigation icons */
+  .home-icon:before {
+    content: "⌂";
+  }
+  
+  .profile-icon:before {
+    content: "👤";
+  }
+  
+  /* Responsive adjustments */
+  @media (min-width: 768px) {
+    .routines-container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+  }
