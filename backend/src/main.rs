@@ -1,6 +1,8 @@
 #![allow(unused_imports)]
+use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{http, middleware};
 use dotenv::dotenv;
 use env_logger::Env;
 use log::{error, info, warn};
@@ -239,7 +241,18 @@ async fn main() -> std::io::Result<()> {
 
     // Start HTTP server
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allowed_origin("http://localhost:8100") // Your frontend's origin
+            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+            .allowed_headers(vec![
+                http::header::AUTHORIZATION,
+                http::header::ACCEPT,
+                http::header::CONTENT_TYPE,
+            ])
+            .max_age(3600);
         App::new()
+            .wrap(middleware::Logger::default())
+            .wrap(cors)
             .wrap(Logger::default()) // Enable logging
             .app_data(web::Data::new(pool.clone()))
             .configure(configure_routes)
