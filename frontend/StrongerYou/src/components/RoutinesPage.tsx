@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { IonContent, IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonIcon, IonRow, IonCol, IonToast } from '@ionic/react';
-import { ellipsisVertical } from 'ionicons/icons';
+import { IonContent, IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonIcon, IonToast } from '@ionic/react';
+import { ellipsisVertical, add } from 'ionicons/icons';
 import './RoutinesPage.css';
 
 interface Routine {
@@ -22,7 +22,6 @@ const RoutinesPage: React.FC = () => {
       try {
         console.log('Fetching routines...');
         const response = await fetch('http://127.0.0.1:8080/routines?sort=createdAt&include=lastPerformed', {
-          // Adding these options for better debugging
           mode: 'cors',
           headers: {
             'Accept': 'application/json',
@@ -64,20 +63,6 @@ const RoutinesPage: React.FC = () => {
     return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
   };
 
-  // For testing - this lets you see mock data even if the API fails
-  const testWithMockData = () => {
-    setRoutines([
-      {
-        "routine_id": 1,
-        "name": "Morning Routine",
-        "timestamp": "2025-02-26T14:57:16.944294",
-        "last_performed": "2023-10-01"
-      }
-    ]);
-    setLoading(false);
-    setError(null);
-  };
-
   return (
     <IonPage>
       <IonHeader className="ion-no-border">
@@ -102,35 +87,33 @@ const RoutinesPage: React.FC = () => {
             >
               View Debug Logs
             </IonButton>
-            <IonButton 
-              className="mock-data-button" 
-              size="small" 
-              onClick={testWithMockData}
-            >
-              Load Test Data
-            </IonButton>
           </div>
         )}
         
         {!loading && !error && (
           <div className="routines-container">
             {routines.length === 0 ? (
-              <p className="no-routines">No routines found. Create your first routine to get started!</p>
+              <div className="no-routines-container">
+                <p className="no-routines">No routines found. Create a routine by clicking the '+' icon.</p>
+                <IonButton className="add-routine-button">
+                  <IonIcon icon={add} />
+                </IonButton>
+              </div>
             ) : (
               routines.map((routine) => (
                 <div key={routine.routine_id} className="routine-card">
-                  <div className="routine-info">
-                    <span className="routine-name">{routine.name}</span>
-                    <span className="last-performed">Last performed {formatDate(routine.last_performed)}</span>
-                  </div>
-                  <div className="routine-actions">
-                    <IonButton expand="block" className="start-button">
-                      Start
-                    </IonButton>
+                  <div className="routine-header">
+                    <div className="routine-title">{routine.name}</div>
                     <div className="more-options">
                       <IonIcon icon={ellipsisVertical} />
                     </div>
                   </div>
+                  <div className="routine-last-performed">
+                    Last performed {formatDate(routine.last_performed)}
+                  </div>
+                  <IonButton expand="block" className="start-button">
+                    Start
+                  </IonButton>
                 </div>
               ))
             )}

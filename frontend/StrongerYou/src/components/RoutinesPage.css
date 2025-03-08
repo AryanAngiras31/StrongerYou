@@ -1,191 +1,218 @@
 /* Main app theming */
 :root {
-    --app-background: #111111;
-    --card-background: #222222;
-    --primary-text: #ffffff;
-    --secondary-text: #888888;
-    --accent-color: #1e88e5;
-    --button-color: #87CEFA;
-    --button-text: #000000;
-    --error-color: #ff6b6b;
-    --debug-button-color: #555555;
-  }
-  
-  /* Page styles */
-  .app-header {
-    --background: var(--app-background);
-    --color: var(--primary-text);
-    padding-top: 12px;
-  }
-  
-  .app-title {
-    font-weight: 700;
-    font-size: 1.5rem;
-    text-align: left;
-    padding-left: 12px;
-  }
-  
-  ion-content {
-    --background: var(--app-background);
-    --color: var(--primary-text);
-  }
-  
-  .routines-title {
-    font-size: 1.4rem;
-    font-weight: 600;
-    margin: 20px 0 24px 12px;
-    color: var(--primary-text);
-  }
-  
-  /* Routine cards */
+  --app-background: var(--ion-background-color);
+  --card-background: var(--ion-color-primary);
+  --primary-text: var(--ion-text-color);
+  --secondary-text: #888888;
+  --accent-color: var(--ion-color-accent);
+  --button-color: var(--ion-color-accent);
+  --button-text: #000000;
+  --error-color: var(--ion-color-error);
+  --debug-button-color: var(--ion-color-secondary);
+}
+
+/* Page styles */
+.app-header {
+  --background: var(--app-background);
+  --color: var(--primary-text);
+  padding-top: 12px;
+}
+
+.app-title {
+  font-weight: 700;
+  font-size: 1.5rem;
+  text-align: left;
+  padding-left: 12px;
+  font-family: 'Poppins', sans-serif;
+}
+
+ion-content {
+  --background: var(--app-background);
+  --color: var(--primary-text);
+  font-family: 'Poppins', sans-serif;
+}
+
+.routines-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 20px 0 24px 12px;
+  color: var(--primary-text);
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Routine cards */
+.routines-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 70px; /* Space for the navigation bar */
+}
+
+.routine-card {
+  background-color: var(--card-background);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.routine-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.routine-title {
+  font-weight: 600;
+  font-size: 1.2rem;
+  color: var(--primary-text);
+}
+
+.routine-last-performed {
+  color: var(--secondary-text);
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.more-options {
+  color: var(--secondary-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.start-button {
+  --background: var(--button-color);
+  --color: var(--button-text);
+  --border-radius: 8px;
+  --box-shadow: none;
+  margin: 0;
+  font-weight: 600;
+  text-transform: none;
+  height: 44px;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Loading and error states */
+.loading-text {
+  text-align: center;
+  color: var(--secondary-text);
+  margin-top: 40px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 40px;
+  padding: 16px;
+  background-color: rgba(172, 59, 61, 0.1);
+  border-radius: 12px;
+}
+
+.error-text {
+  color: var(--error-color);
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.error-details {
+  color: var(--secondary-text);
+  text-align: center;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  word-break: break-word;
+  font-family: 'Poppins', sans-serif;
+}
+
+.debug-button {
+  --background: var(--debug-button-color);
+  margin: 4px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.no-routines-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.no-routines {
+  text-align: center;
+  color: var(--secondary-text);
+  margin-bottom: 16px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.add-routine-button {
+  --background: var(--button-color);
+  --color: var(--button-text);
+  --border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  --padding-start: 0;
+  --padding-end: 0;
+}
+
+/* Navigation bar */
+.navigation-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: var(--app-background);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-top: 1px solid #333;
+  z-index: 1000;
+}
+
+.nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+}
+
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--secondary-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timer-icon {
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Add placeholder styling for the navigation icons */
+.home-icon:before {
+  content: "⌂";
+}
+
+.profile-icon:before {
+  content: "👤";
+}
+
+/* Responsive adjustments */
+@media (min-width: 768px) {
   .routines-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding-bottom: 70px; /* Space for the navigation bar */
+    max-width: 600px;
+    margin: 0 auto;
   }
-  
-  .routine-card {
-    background-color: var(--card-background);
-    border-radius: 12px;
-    padding: 16px;
-    margin: 0 4px;
-  }
-  
-  .routine-info {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 12px;
-  }
-  
-  .routine-name {
-    font-weight: 600;
-    font-size: 1.1rem;
-    margin-bottom: 6px;
-  }
-  
-  .last-performed {
-    color: var(--secondary-text);
-    font-size: 0.8rem;
-  }
-  
-  .routine-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  
-  .start-button {
-    --background: var(--button-color);
-    --color: var(--button-text);
-    --border-radius: 8px;
-    --box-shadow: none;
-    margin: 0;
-    font-weight: 600;
-    text-transform: none;
-    flex: 1;
-  }
-  
-  .more-options {
-    padding: 8px;
-    margin-left: 10px;
-    color: var(--secondary-text);
-  }
-  
-  /* Loading and error states */
-  .loading-text {
-    text-align: center;
-    color: var(--secondary-text);
-    margin-top: 40px;
-  }
-  
-  .error-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-top: 40px;
-    padding: 16px;
-    background-color: rgba(255, 107, 107, 0.1);
-    border-radius: 12px;
-  }
-  
-  .error-text {
-    color: var(--error-color);
-    text-align: center;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-  
-  .error-details {
-    color: var(--secondary-text);
-    text-align: center;
-    font-size: 0.9rem;
-    margin-bottom: 16px;
-    word-break: break-word;
-  }
-  
-  .debug-button, .mock-data-button {
-    --background: var(--debug-button-color);
-    margin: 4px;
-  }
-  
-  .no-routines {
-    text-align: center;
-    color: var(--secondary-text);
-    margin-top: 24px;
-  }
-  
-  /* Navigation bar */
-  .navigation-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background-color: var(--app-background);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    border-top: 1px solid #333;
-    z-index: 1000;
-  }
-  
-  .nav-button {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    height: 100%;
-  }
-  
-  .nav-icon {
-    width: 24px;
-    height: 24px;
-    color: var(--secondary-text);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .timer-icon {
-    font-weight: 600;
-    font-size: 0.9rem;
-  }
-  
-  /* Add placeholder styling for the navigation icons */
-  .home-icon:before {
-    content: "⌂";
-  }
-  
-  .profile-icon:before {
-    content: "👤";
-  }
-  
-  /* Responsive adjustments */
-  @media (min-width: 768px) {
-    .routines-container {
-      max-width: 600px;
-      margin: 0 auto;
-    }
-  }
+}
