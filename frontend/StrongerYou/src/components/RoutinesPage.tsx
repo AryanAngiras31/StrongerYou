@@ -109,7 +109,7 @@ const RoutinesPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="routine-last-performed">
-                    Last performed {formatDate(routine.last_performed)}
+                    last performed {formatDate(routine.last_performed)}
                   </div>
                   <IonButton expand="block" className="start-button">
                     Start
