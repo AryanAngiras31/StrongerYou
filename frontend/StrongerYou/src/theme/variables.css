@@ -1,2 +1,35 @@
-/* For information on how to create your own theme, please see:
-http://ionicframework.com/docs/theming/ */
+:root {
+    /* Color Variables */
+    --ion-background-color: #121212;
+    --ion-text-color: #fafafa;
+    --ion-color-primary: #2e3435;
+    --ion-color-secondary: #3d3d3d;
+    --ion-color-accent: #acddf4;
+    --ion-color-error: #ac3b3d;
+  
+    /* Font Variables */
+    --ion-font-family: 'Poppins', sans-serif;
+  }
+  
+  /* Apply the font family to the body */
+  body {
+    font-family: var(--ion-font-family);
+  }
+  
+  /* Heading styles */
+  h1, h2, h3, h4, h5, h6 {
+    font-size: 18px;
+    font-weight: bold;
+  }
+  
+  /* Body text styles */
+  p, span, a {
+    font-size: 18px;
+    font-weight: regular;
+  }
+  
+  /* Small text styles */
+  small {
+    font-size: 14px;
+    font-weight: regular;
+  }
