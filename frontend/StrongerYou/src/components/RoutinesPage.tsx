@@ -21,7 +21,7 @@ const RoutinesPage: React.FC = () => {
     const fetchRoutines = async () => {
       try {
         console.log('Fetching routines...');
-        const response = await fetch('http://127.0.0.1:8080/routines?sort=createdAt&include=lastPerformed', {
+        const response = await fetch('http://localhost:8080/routines?sort=createdAt&include=lastPerformed', {
           mode: 'cors',
           headers: {
             'Accept': 'application/json',

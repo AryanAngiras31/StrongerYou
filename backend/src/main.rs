@@ -257,7 +257,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .configure(configure_routes)
     })
-    .bind(("127.0.0.1", port))?
+    .bind(("localhost", port))?
     .run()
     .await
 }
