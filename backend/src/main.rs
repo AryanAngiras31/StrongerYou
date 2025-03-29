@@ -242,7 +242,7 @@ async fn main() -> std::io::Result<()> {
     // Start HTTP server
     HttpServer::new(move || {
         let cors = Cors::default()
-            .allowed_origin("https://localhost:8100") // Your frontend's origin
+            .allowed_origin("https://localhost:8101") // Your frontend's origin
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
             .allowed_headers(vec![
                 http::header::AUTHORIZATION,
