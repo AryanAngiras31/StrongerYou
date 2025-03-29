@@ -18,7 +18,7 @@ mod workouts;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let port = 8080;
+    let port = 8081;
     dotenv::dotenv().ok();
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let database_url = env::var("DATABASE_URL").expect("Failed to obtain database url");
