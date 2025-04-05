@@ -4,15 +4,19 @@ FROM node:18-slim
 # Set the working directory
 WORKDIR /usr/src/app
 
-# Copy package.json and install dependencies
+# Install dependencies
 COPY frontend/package*.json ./
-RUN npm install -g expo-cli 
+RUN npm set registry https://registry.npmjs.org/ && \
+    npm set fetch-retries 5 && \
+    npm set fetch-retry-mintimeout 20000 && \
+    npm set fetch-retry-maxtimeout 120000 && \
+    npm install
 
-# Copy the application code
-COPY frontend/ .
+# Install Ionic CLI globally
+RUN npm install -g @ionic/cli
 
-# Expose Expo development port
-EXPOSE 19000 19001 19002
+# Copy the rest of the application code
+COPY . .
 
-# Start the Expo development server
-CMD ["expo", "start", "--tunnel"]
+# Start the Ionic application
+CMD ["ionic", "serve", "--host", "0.0.0.0"]
