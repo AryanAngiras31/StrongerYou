@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'https://localhost:8080/';
+const BASE_URL = 'https://localhost:8080';
 
 // Routines API
 
@@ -106,3 +106,6 @@ export const view_routine = async (routineId: number) => {
       throw error;
   }
 };
+
+// Exercises API
+
