@@ -7,10 +7,11 @@ import {
     view_routine
 } from '../services/api'; // Adjust the path if needed
 import axios from 'axios';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+vi.mock('axios');
+const mockedAxios = axios as vi.Mocked<typeof axios>;
 
 // Define reusable headers
 const standardHeaders = {
@@ -42,7 +43,7 @@ describe('Routines API Tests', () => {
 
     beforeEach(() => {
         // Reset mocks before each test to avoid interference
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         // Reset ID for isolated test runs if needed, but the flow depends on it persisting
         // createdRoutineId = null;
     });
@@ -201,8 +202,8 @@ describe('Routines API Tests', () => {
         const result = await list_routines();
 
         expect(mockedAxios.get).toHaveBeenCalledWith(`${BASE_URL}/routines`, {
-             params: { include: undefined },
-             headers: standardHeaders
+                params: { include: undefined },
+                headers: standardHeaders
         });
         expect(result).toEqual([]);
         expect(result).toHaveLength(0);
