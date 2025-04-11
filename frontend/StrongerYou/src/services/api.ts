@@ -126,7 +126,7 @@ export const start_a_new_workout = async (routineId: number) => {
 
 
 // 2. Modify an Existing Workout 
-export const modify_workout = async (workoutId: number, workout_data: {routine_id: number, start_time: string, end_time: string, exercises: {exercise_id: number, exercise_name: string,  sets: {set_number:number, set:{weight: number, reps: number}[]}[]}}) => {
+export const modify_workout = async (workoutId: number, workout_data: {routine_id: number, start_time: string, end_time: string, exercises: {exercise_id: number, exercise_name: string,  sets: {set_number:number, set:{weight: number, reps: number}[]}[]}[]}) => {
     try {
         const response = await axios.put(`${BASE_URL}/workouts/${workoutId}`, {
             params: workout_data,
@@ -142,3 +142,17 @@ export const modify_workout = async (workoutId: number, workout_data: {routine_i
 }
 
 // 3. Finish Workout
+export const finish_workout = async (workout_data: {routine_id: number, start_time: string, end_time: string, exercises: {exercise_id: number, exercise_name: string,  sets: {set_number:number, set:{weight: number, reps: number}[]}[]}[]}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/workouts`, {
+            params: workout_data,
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error finishing workout:', error);
+    }
+}
