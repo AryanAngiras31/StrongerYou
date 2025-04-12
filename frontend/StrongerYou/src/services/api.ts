@@ -156,3 +156,49 @@ export const finish_workout = async (workout_data: {routine_id: number, start_ti
         console.error('Error finishing workout:', error);
     }
 }
+
+// 4. Validate Set
+export const validate_set = async (exercise_id: number, weight: number, reps: number) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/workouts/validate`, {
+            params: {exercise_id, weight, reps},
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error validating set:', error);
+    }
+}
+
+// 5. Display Workouts
+export const display_workouts = async () => {
+    try {
+        const response = await axios.get(`${BASE_URL}/workouts`, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error displaying workouts:', error);
+    }
+}
+
+// 6. View Workout
+export const view_workout = async (workoutId: number) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/workouts/${workoutId}`, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error viewing workout:', error);
+    }
+}
