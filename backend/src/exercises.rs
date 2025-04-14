@@ -1,21 +1,16 @@
 use actix_web::{delete, get, post, web, HttpResponse, Responder};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc}; // Added NaiveDateTime
 use log::error;
 use serde::{Deserialize, Serialize};
+use serde_json::json; // Added for JSON error responses
 use sqlx::PgPool;
 
 // Data structures for request/response handling
 #[derive(Serialize, Deserialize, Debug)]
-struct Exercise {
+struct ExerciseInput {
     exercise_name: String,
     muscles_trained: Vec<String>,
     exercise_type: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TimeRange {
-    start_date: DateTime<Utc>,
-    end_date: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,6 +28,7 @@ struct PersonalRecord {
     set_volume: i32,
 }
 
+// Used for the search results (partial name match)
 #[derive(sqlx::FromRow, Serialize)]
 struct ExerciseSearchResult {
     exerciseid: i32,
@@ -40,19 +36,20 @@ struct ExerciseSearchResult {
     muscles_trained: Vec<String>,
 }
 
-// Custom error response structure
-#[derive(Serialize)]
-struct ErrorResponse {
-    error: String,
-    details: Option<String>,
+// Used for getting just the ID from an exact name match
+#[derive(sqlx::FromRow, Serialize)]
+struct ExerciseIdResult {
+    exerciseid: i32,
 }
 
+// Used for the response when creating an exercise
 #[derive(sqlx::FromRow, Serialize)]
-struct CreatedExercise {
+struct ExerciseDetails {
+    // Renamed from CreatedExercise
     exerciseid: i32,
     exercisename: String,
     muscles_trained: Vec<String>,
-    exercisetype: String, // Added this field
+    exercisetype: String,
 }
 
 #[derive(sqlx::FromRow, Serialize)]
@@ -60,68 +57,112 @@ struct DeletedExercise {
     exerciseid: i32,
 }
 
-// Search for exercises by name
-#[get("/exercises/{exercise_name}")]
-async fn search_exercise(
+// --- NEW: Search for exercises by partial name ---
+#[get("/exercises/search/{partial_name}")]
+async fn search_exercises_by_name(
     pool: web::Data<PgPool>,
-    exercise_name: web::Path<String>,
+    partial_name: web::Path<String>,
 ) -> impl Responder {
+    let search_term = format!("%{}%", partial_name.as_ref()); // Add wildcards for ILIKE
     let exercises = sqlx::query_as!(
         ExerciseSearchResult,
         r#"
-        SELECT ExerciseID as exerciseid, ExerciseName as exercisename, MusclesTrained as muscles_trained
-        FROM ExerciseList 
-        WHERE ExerciseName ILIKE $1
+        SELECT
+            ExerciseID as exerciseid,
+            ExerciseName as exercisename,
+            MusclesTrained as muscles_trained
+        FROM ExerciseList
+        WHERE ExerciseName ILIKE $1 -- Case-insensitive partial match
+        ORDER BY ExerciseName -- Optional: order results
+        LIMIT 20 -- Optional: limit the number of results
         "#,
-        format!("%{}%", exercise_name.as_ref())
+        search_term
     )
     .fetch_all(pool.get_ref())
     .await;
 
     match exercises {
-        Ok(results) => HttpResponse::Ok().json(results),
+        Ok(results) => HttpResponse::Ok().json(results), // Return list (can be empty)
         Err(e) => {
-            error!("Database error in search_exercise: {:?}", e);
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "Failed to search exercises".to_string(),
-                details: Some(e.to_string()),
-            })
+            error!("Database error in search_exercises_by_name: {:?}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to search exercises",
+                "details": e.to_string()
+            }))
         }
     }
 }
 
-// Create a new exercise
-#[post("/exercises")]
-async fn create_exercise(pool: web::Data<PgPool>, exercise: web::Json<Exercise>) -> impl Responder {
-    error!("Received exercise data: {:?}", exercise);
-
-    let existing = sqlx::query!(
-        "SELECT ExerciseID FROM ExerciseList WHERE ExerciseName = $1",
-        exercise.exercise_name
+// --- NEW: Get exercise ID by exact name ---
+#[get("/exercises/id/{exercise_name}")]
+async fn get_exercise_id_by_name(
+    pool: web::Data<PgPool>,
+    exercise_name: web::Path<String>,
+) -> impl Responder {
+    let name = exercise_name.into_inner();
+    // Use ILIKE for case-insensitive exact match. Use '=' if case must match exactly.
+    let exercise_id_result = sqlx::query_as!(
+        ExerciseIdResult,
+        r#"
+        SELECT ExerciseID as exerciseid
+        FROM ExerciseList
+        WHERE ExerciseName ILIKE $1 -- Case-insensitive exact match
+        "#,
+        name // Pass the exact name
     )
     .fetch_optional(pool.get_ref())
     .await;
 
-    match existing {
-        Ok(Some(_)) => HttpResponse::Conflict().json(ErrorResponse {
-            error: "Exercise already exists".to_string(),
-            details: None,
-        }),
+    match exercise_id_result {
+        Ok(Some(result)) => HttpResponse::Ok().json(result),
+        Ok(None) => HttpResponse::NotFound().json(json!({
+            "error": "Exercise not found",
+            "details": format!("No exercise found with the exact name: {}", name)
+        })),
+        Err(e) => {
+            error!("Database error in get_exercise_id_by_name: {:?}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch exercise ID by name",
+                "details": e.to_string()
+            }))
+        }
+    }
+}
+
+// Create a new exercise (Unchanged from previous version A)
+#[post("/exercises")]
+async fn create_exercise(
+    pool: web::Data<PgPool>,
+    exercise_input: web::Json<ExerciseInput>,
+) -> impl Responder {
+    match sqlx::query!(
+        "SELECT ExerciseID FROM ExerciseList WHERE ExerciseName ILIKE $1", // Use ILIKE for case-insensitive check
+        exercise_input.exercise_name
+    )
+    .fetch_optional(pool.get_ref())
+    .await
+    {
+        Ok(Some(_)) => {
+            HttpResponse::Conflict().json(json!({
+                "error": "Exercise already exists",
+                "details": format!("An exercise with the name '{}' already exists (case-insensitive).", exercise_input.exercise_name)
+            }))
+        }
         Ok(None) => {
             let result = sqlx::query_as!(
-                CreatedExercise,
+                ExerciseDetails,
                 r#"
                 INSERT INTO ExerciseList (ExerciseName, MusclesTrained, ExerciseType)
                 VALUES ($1, $2, $3)
-                RETURNING 
-                    ExerciseID as exerciseid, 
-                    ExerciseName as exercisename, 
+                RETURNING
+                    ExerciseID as exerciseid,
+                    ExerciseName as exercisename,
                     MusclesTrained as muscles_trained,
                     ExerciseType as exercisetype
                 "#,
-                exercise.exercise_name,
-                &exercise.muscles_trained as &[String],
-                exercise.exercise_type // Added exercise_type to the INSERT
+                exercise_input.exercise_name,
+                &exercise_input.muscles_trained,
+                exercise_input.exercise_type
             )
             .fetch_one(pool.get_ref())
             .await;
@@ -129,71 +170,69 @@ async fn create_exercise(pool: web::Data<PgPool>, exercise: web::Json<Exercise>)
             match result {
                 Ok(created_exercise) => HttpResponse::Created().json(created_exercise),
                 Err(e) => {
-                    error!("Database error in create_exercise: {:?}", e);
-                    HttpResponse::InternalServerError().json(ErrorResponse {
-                        error: "Failed to create exercise".to_string(),
-                        details: Some(format!("Database error: {}", e)),
-                    })
+                    error!("Database error in create_exercise during INSERT: {:?}", e);
+                    HttpResponse::InternalServerError().json(json!({
+                        "error": "Failed to create exercise",
+                        "details": e.to_string()
+                    }))
                 }
             }
         }
         Err(e) => {
-            error!("Database error checking existing exercise: {:?}", e);
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "Database error".to_string(),
-                details: Some(e.to_string()),
-            })
+            error!("Database error in create_exercise checking existence: {:?}", e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Database error while checking for existing exercise",
+                "details": e.to_string()
+            }))
         }
     }
 }
 
-// Delete an exercise
-#[delete("/exercises/{exercise_name}")]
-async fn delete_exercise(
-    pool: web::Data<PgPool>,
-    exercise_name: web::Path<String>,
-) -> impl Responder {
+// Delete an exercise by ID (Unchanged from previous version A)
+#[delete("/exercises/{exercise_id}")]
+async fn delete_exercise(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) -> impl Responder {
+    let id = exercise_id.into_inner();
     let result = sqlx::query_as!(
         DeletedExercise,
         r#"
-        DELETE FROM ExerciseList 
-        WHERE ExerciseName = $1 
+        DELETE FROM ExerciseList
+        WHERE ExerciseID = $1
         RETURNING ExerciseID as exerciseid
         "#,
-        exercise_name.as_ref()
+        id
     )
     .fetch_optional(pool.get_ref())
     .await;
 
     match result {
         Ok(Some(deleted_exercise)) => HttpResponse::Ok().json(deleted_exercise),
-        Ok(None) => HttpResponse::NotFound().json(ErrorResponse {
-            error: "Exercise not found".to_string(),
-            details: None,
-        }),
+        Ok(None) => HttpResponse::NotFound().json(json!({
+            "error": "Exercise not found",
+            "details": format!("Exercise with ID {} could not be deleted because it was not found.", id)
+        })),
         Err(e) => {
             error!("Database error in delete_exercise: {:?}", e);
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "Failed to delete exercise".to_string(),
-                details: Some(e.to_string()),
-            })
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to delete exercise",
+                "details": e.to_string()
+            }))
         }
     }
 }
 
-// Get set volume history for an exercise
-#[get("/exercises/{exercise_id}/volume")]
+// Get set volume history for an exercise by ID (Unchanged from previous version A)
+#[get("/exercises/volume/{exercise_id}")]
 async fn get_exercise_volume(
     pool: web::Data<PgPool>,
-    exercise_id: web::Path<i16>,
+    exercise_id: web::Path<i32>,
 ) -> impl Responder {
-    let volumes = sqlx::query!(
+    let volumes_raw = sqlx::query!(
         r#"
-        SELECT w.Start as workout_date, SUM(s.Weight * s.Reps) as volume
+        SELECT w.Start as workout_date_naive, SUM(s.Weight * s.Reps) as total_volume
         FROM Workout w
         JOIN Workout_Exercises_Sets wes ON w.WorkoutID = wes.WorkoutID
         JOIN "Set" s ON wes.SetID = s.SetID
-        WHERE wes.ExerciseID = $1 
+        WHERE wes.ExerciseID = $1
         GROUP BY w.Start
         ORDER BY w.Start
         "#,
@@ -202,40 +241,49 @@ async fn get_exercise_volume(
     .fetch_all(pool.get_ref())
     .await;
 
-    match volumes {
+    match volumes_raw {
         Ok(results) => {
             let stats: Vec<ExerciseStats> = results
                 .into_iter()
-                .map(|row| ExerciseStats {
-                    date: DateTime::from_naive_utc_and_offset(row.workout_date, Utc),
-                    value: row.volume.unwrap_or(0) as f64,
+                .filter_map(|row| {
+                    let date_naive = row.workout_date_naive?;
+                    let volume_raw = row.total_volume?;
+                    let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
+                    let volume_f64 = match sqlx::types::Decimal::try_from(volume_raw) {
+                        Ok(dec) => dec.try_into().unwrap_or(0.0),
+                        Err(_) => 0.0,
+                    };
+                    Some(ExerciseStats {
+                        date: date_utc,
+                        value: volume_f64,
+                    })
                 })
                 .collect();
             HttpResponse::Ok().json(stats)
         }
         Err(e) => {
             error!("Database error in get_exercise_volume: {:?}", e);
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "Failed to fetch volume data".to_string(),
-                details: Some(e.to_string()),
-            })
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch volume data",
+                "details": e.to_string()
+            }))
         }
     }
 }
 
-// Get max weight history for an exercise
-#[get("/exercises/{exercise_id}/max-weight")]
+// Get max weight history for an exercise by ID (Unchanged from previous version A)
+#[get("/exercises/max-weight/{exercise_id}")]
 async fn get_exercise_max_weight(
     pool: web::Data<PgPool>,
-    exercise_id: web::Path<i16>,
+    exercise_id: web::Path<i32>,
 ) -> impl Responder {
-    let max_weights = sqlx::query!(
+    let max_weights_raw = sqlx::query!(
         r#"
-        SELECT w.Start as workout_date, MAX(s.Weight) as max_weight
+        SELECT w.Start as workout_date_naive, MAX(s.Weight) as max_weight_val
         FROM Workout w
         JOIN Workout_Exercises_Sets wes ON w.WorkoutID = wes.WorkoutID
         JOIN "Set" s ON wes.SetID = s.SetID
-        WHERE wes.ExerciseID = $1 
+        WHERE wes.ExerciseID = $1 AND s.Weight IS NOT NULL
         GROUP BY w.Start
         ORDER BY w.Start
         "#,
@@ -244,33 +292,42 @@ async fn get_exercise_max_weight(
     .fetch_all(pool.get_ref())
     .await;
 
-    match max_weights {
+    match max_weights_raw {
         Ok(results) => {
             let stats: Vec<ExerciseStats> = results
                 .into_iter()
-                .map(|row| ExerciseStats {
-                    date: DateTime::from_naive_utc_and_offset(row.workout_date, Utc),
-                    value: row.max_weight.unwrap_or(0) as f64,
+                .filter_map(|row| {
+                    let date_naive = row.workout_date_naive?;
+                    let max_w = row.max_weight_val?;
+                    let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
+                    Some(ExerciseStats {
+                        date: date_utc,
+                        value: max_w as f64,
+                    })
                 })
                 .collect();
             HttpResponse::Ok().json(stats)
         }
         Err(e) => {
             error!("Database error in get_exercise_max_weight: {:?}", e);
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "Failed to fetch max weight data".to_string(),
-                details: Some(e.to_string()),
-            })
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch max weight data",
+                "details": e.to_string()
+            }))
         }
     }
 }
 
-// Get PRs for an exercise
-#[get("/exercises/{exercise_id}/prs")]
-async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i16>) -> impl Responder {
-    let prs = sqlx::query!(
+// Get PRs for an exercise by ID (Unchanged from previous version A)
+#[get("/exercises/prs/{exercise_id}")]
+async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) -> impl Responder {
+    let prs_raw = sqlx::query!(
         r#"
-        SELECT w.Start as workout_date, p.HeaviestWeight, p.OneRM as one_rm, p.SetVolume
+        SELECT
+            w.Start as workout_date_naive,
+            p.HeaviestWeight as heaviest_weight,
+            p.OneRM as one_rm,
+            p.SetVolume as set_volume
         FROM PRs p
         JOIN Workout w ON p.WorkoutID = w.WorkoutID
         WHERE p.ExerciseID = $1
@@ -281,33 +338,38 @@ async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i16>) 
     .fetch_all(pool.get_ref())
     .await;
 
-    match prs {
+    match prs_raw {
         Ok(results) => {
             let pr_records: Vec<PersonalRecord> = results
                 .into_iter()
-                .map(|row| PersonalRecord {
-                    workout_date: DateTime::from_naive_utc_and_offset(row.workout_date, Utc),
-                    weight: row.heaviestweight,
-                    one_rm: row.one_rm,
-                    set_volume: row.setvolume,
-                    reps: 0,
+                .filter_map(|row| {
+                    let date_naive = row.workout_date_naive?;
+                    let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
+                    Some(PersonalRecord {
+                        workout_date: date_utc,
+                        weight: row.heaviest_weight?,
+                        one_rm: row.one_rm?,
+                        set_volume: row.set_volume?,
+                        reps: 0,
+                    })
                 })
                 .collect();
             HttpResponse::Ok().json(pr_records)
         }
         Err(e) => {
             error!("Database error in get_exercise_prs: {:?}", e);
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "Failed to fetch PRs".to_string(),
-                details: Some(e.to_string()),
-            })
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to fetch PRs",
+                "details": e.to_string()
+            }))
         }
     }
 }
 
-// Initialize all routes
+// Initialize all routes - Updated
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(search_exercise)
+    cfg.service(search_exercises_by_name)
+        .service(get_exercise_id_by_name)
         .service(create_exercise)
         .service(delete_exercise)
         .service(get_exercise_volume)
