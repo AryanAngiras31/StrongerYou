@@ -236,7 +236,7 @@ async fn get_exercise_volume(
         GROUP BY w.Start
         ORDER BY w.Start
         "#,
-        exercise_id.into_inner()
+        exercise_id.into_inner() as i32
     )
     .fetch_all(pool.get_ref())
     .await;
@@ -246,10 +246,10 @@ async fn get_exercise_volume(
             let stats: Vec<ExerciseStats> = results
                 .into_iter()
                 .filter_map(|row| {
-                    let date_naive = row.workout_date_naive?;
+                    let date_naive = row.workout_date_naive;
                     let volume_raw = row.total_volume?;
                     let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
-                    let volume_f64 = match sqlx::types::Decimal::try_from(volume_raw) {
+                    let volume_f64 = match sqlx::types::f32::try_from(volume_raw) {
                         Ok(dec) => dec.try_into().unwrap_or(0.0),
                         Err(_) => 0.0,
                     };
@@ -287,7 +287,7 @@ async fn get_exercise_max_weight(
         GROUP BY w.Start
         ORDER BY w.Start
         "#,
-        exercise_id.into_inner()
+        exercise_id.into_inner() as i32
     )
     .fetch_all(pool.get_ref())
     .await;
@@ -297,7 +297,7 @@ async fn get_exercise_max_weight(
             let stats: Vec<ExerciseStats> = results
                 .into_iter()
                 .filter_map(|row| {
-                    let date_naive = row.workout_date_naive?;
+                    let date_naive = row.workout_date_naive;
                     let max_w = row.max_weight_val?;
                     let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
                     Some(ExerciseStats {
@@ -333,7 +333,7 @@ async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) 
         WHERE p.ExerciseID = $1
         ORDER BY p.OneRM DESC, p.HeaviestWeight DESC, p.SetVolume DESC
         "#,
-        exercise_id.into_inner()
+        exercise_id.into_inner() as i32
     )
     .fetch_all(pool.get_ref())
     .await;
@@ -343,13 +343,13 @@ async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) 
             let pr_records: Vec<PersonalRecord> = results
                 .into_iter()
                 .filter_map(|row| {
-                    let date_naive = row.workout_date_naive?;
+                    let date_naive = row.workout_date_naive;
                     let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
                     Some(PersonalRecord {
                         workout_date: date_utc,
-                        weight: row.heaviest_weight?,
-                        one_rm: row.one_rm?,
-                        set_volume: row.set_volume?,
+                        weight: row.heaviest_weight,
+                        one_rm: row.one_rm,
+                        set_volume: row.set_volume,
                         reps: 0,
                     })
                 })
