@@ -1,8 +1,9 @@
 use actix_web::{delete, get, post, web, HttpResponse, Responder};
-use chrono::{DateTime, NaiveDateTime, Utc}; // Added NaiveDateTime
+// Make sure NaiveDateTime is imported if you use it directly
+use chrono::{DateTime, NaiveDateTime, Utc};
 use log::error;
 use serde::{Deserialize, Serialize};
-use serde_json::json; // Added for JSON error responses
+use serde_json::json;
 use sqlx::PgPool;
 
 // Data structures for request/response handling
@@ -28,7 +29,6 @@ struct PersonalRecord {
     set_volume: i32,
 }
 
-// Used for the search results (partial name match)
 #[derive(sqlx::FromRow, Serialize)]
 struct ExerciseSearchResult {
     exerciseid: i32,
@@ -36,16 +36,13 @@ struct ExerciseSearchResult {
     muscles_trained: Vec<String>,
 }
 
-// Used for getting just the ID from an exact name match
 #[derive(sqlx::FromRow, Serialize)]
 struct ExerciseIdResult {
     exerciseid: i32,
 }
 
-// Used for the response when creating an exercise
 #[derive(sqlx::FromRow, Serialize)]
 struct ExerciseDetails {
-    // Renamed from CreatedExercise
     exerciseid: i32,
     exercisename: String,
     muscles_trained: Vec<String>,
@@ -57,13 +54,13 @@ struct DeletedExercise {
     exerciseid: i32,
 }
 
-// --- NEW: Search for exercises by partial name ---
+// Search for exercises by partial name (Unchanged)
 #[get("/exercises/search/{partial_name}")]
 async fn search_exercises_by_name(
     pool: web::Data<PgPool>,
     partial_name: web::Path<String>,
 ) -> impl Responder {
-    let search_term = format!("%{}%", partial_name.as_ref()); // Add wildcards for ILIKE
+    let search_term = format!("%{}%", partial_name.as_ref());
     let exercises = sqlx::query_as!(
         ExerciseSearchResult,
         r#"
@@ -72,9 +69,9 @@ async fn search_exercises_by_name(
             ExerciseName as exercisename,
             MusclesTrained as muscles_trained
         FROM ExerciseList
-        WHERE ExerciseName ILIKE $1 -- Case-insensitive partial match
-        ORDER BY ExerciseName -- Optional: order results
-        LIMIT 20 -- Optional: limit the number of results
+        WHERE ExerciseName ILIKE $1
+        ORDER BY ExerciseName
+        LIMIT 20
         "#,
         search_term
     )
@@ -82,7 +79,7 @@ async fn search_exercises_by_name(
     .await;
 
     match exercises {
-        Ok(results) => HttpResponse::Ok().json(results), // Return list (can be empty)
+        Ok(results) => HttpResponse::Ok().json(results),
         Err(e) => {
             error!("Database error in search_exercises_by_name: {:?}", e);
             HttpResponse::InternalServerError().json(json!({
@@ -93,22 +90,21 @@ async fn search_exercises_by_name(
     }
 }
 
-// --- NEW: Get exercise ID by exact name ---
+// Get exercise ID by exact name (Unchanged)
 #[get("/exercises/id/{exercise_name}")]
 async fn get_exercise_id_by_name(
     pool: web::Data<PgPool>,
     exercise_name: web::Path<String>,
 ) -> impl Responder {
     let name = exercise_name.into_inner();
-    // Use ILIKE for case-insensitive exact match. Use '=' if case must match exactly.
     let exercise_id_result = sqlx::query_as!(
         ExerciseIdResult,
         r#"
         SELECT ExerciseID as exerciseid
         FROM ExerciseList
-        WHERE ExerciseName ILIKE $1 -- Case-insensitive exact match
+        WHERE ExerciseName ILIKE $1
         "#,
-        name // Pass the exact name
+        name
     )
     .fetch_optional(pool.get_ref())
     .await;
@@ -129,14 +125,14 @@ async fn get_exercise_id_by_name(
     }
 }
 
-// Create a new exercise (Unchanged from previous version A)
+// Create a new exercise (Unchanged)
 #[post("/exercises")]
 async fn create_exercise(
     pool: web::Data<PgPool>,
     exercise_input: web::Json<ExerciseInput>,
 ) -> impl Responder {
     match sqlx::query!(
-        "SELECT ExerciseID FROM ExerciseList WHERE ExerciseName ILIKE $1", // Use ILIKE for case-insensitive check
+        "SELECT ExerciseID FROM ExerciseList WHERE ExerciseName ILIKE $1",
         exercise_input.exercise_name
     )
     .fetch_optional(pool.get_ref())
@@ -188,9 +184,13 @@ async fn create_exercise(
     }
 }
 
-// Delete an exercise by ID (Unchanged from previous version A)
+// Delete an exercise by ID
 #[delete("/exercises/{exercise_id}")]
-async fn delete_exercise(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) -> impl Responder {
+async fn delete_exercise(
+    pool: web::Data<PgPool>,
+    exercise_id: web::Path<i32>, // Keep i32 if ExerciseList.ExerciseID is INTEGER
+) -> impl Responder {
+    // Note: Assuming ExerciseList.ExerciseID is i32. If it's SMALLINT, change Path to i16.
     let id = exercise_id.into_inner();
     let result = sqlx::query_as!(
         DeletedExercise,
@@ -199,7 +199,7 @@ async fn delete_exercise(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) -
         WHERE ExerciseID = $1
         RETURNING ExerciseID as exerciseid
         "#,
-        id
+        id // Pass i32 directly
     )
     .fetch_optional(pool.get_ref())
     .await;
@@ -220,23 +220,32 @@ async fn delete_exercise(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) -
     }
 }
 
-// Get set volume history for an exercise by ID (Unchanged from previous version A)
+// Get set volume history for an exercise by ID
 #[get("/exercises/volume/{exercise_id}")]
 async fn get_exercise_volume(
     pool: web::Data<PgPool>,
-    exercise_id: web::Path<i32>,
+    exercise_id: web::Path<i16>, // Keep i16 based on previous error
 ) -> impl Responder {
-    let volumes_raw = sqlx::query!(
+    // Define the expected return types - expecting i64 due to SQL CAST
+    struct VolumeRow {
+        workout_date_naive: Option<NaiveDateTime>,
+        total_volume: Option<i64>, // Expecting BIGINT from SQL CAST
+    }
+
+    let volumes_raw = sqlx::query_as!(
+        VolumeRow,
         r#"
-        SELECT w.Start as workout_date_naive, SUM(s.Weight * s.Reps) as total_volume
+        SELECT w.Start as workout_date_naive,
+               -- Cast the final SUM result to BIGINT (i64) in SQL
+               CAST( SUM( s.Weight * s.Reps ) AS BIGINT ) as total_volume
         FROM Workout w
         JOIN Workout_Exercises_Sets wes ON w.WorkoutID = wes.WorkoutID
         JOIN "Set" s ON wes.SetID = s.SetID
-        WHERE wes.ExerciseID = $1
+        WHERE wes.ExerciseID = $1 -- Expects i16 here
         GROUP BY w.Start
         ORDER BY w.Start
         "#,
-        exercise_id.into_inner() as i32
+        exercise_id.into_inner() // Provides i16
     )
     .fetch_all(pool.get_ref())
     .await;
@@ -246,17 +255,20 @@ async fn get_exercise_volume(
             let stats: Vec<ExerciseStats> = results
                 .into_iter()
                 .filter_map(|row| {
-                    let date_naive = row.workout_date_naive;
-                    let volume_raw = row.total_volume?;
-                    let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
-                    let volume_f64 = match sqlx::types::f32::try_from(volume_raw) {
-                        Ok(dec) => dec.try_into().unwrap_or(0.0),
-                        Err(_) => 0.0,
-                    };
-                    Some(ExerciseStats {
-                        date: date_utc,
-                        value: volume_f64,
-                    })
+                    // Match on the Option fields
+                    match (row.workout_date_naive, row.total_volume) {
+                        (Some(date_naive), Some(volume_numeric)) => {
+                            // volume_numeric is i64
+                            let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
+                            // Convert the i64 volume to f64
+                            let value = volume_numeric as f64;
+                            Some(ExerciseStats {
+                                date: date_utc,
+                                value,
+                            })
+                        }
+                        _ => None, // Skip if date or volume is None
+                    }
                 })
                 .collect();
             HttpResponse::Ok().json(stats)
@@ -271,23 +283,30 @@ async fn get_exercise_volume(
     }
 }
 
-// Get max weight history for an exercise by ID (Unchanged from previous version A)
+// Get max weight history for an exercise by ID
 #[get("/exercises/max-weight/{exercise_id}")]
 async fn get_exercise_max_weight(
     pool: web::Data<PgPool>,
-    exercise_id: web::Path<i32>,
+    exercise_id: web::Path<i16>, // <<<<<<<< CHANGED to i16 based on error E0308
 ) -> impl Responder {
-    let max_weights_raw = sqlx::query!(
+    // Define expected return types
+    struct MaxWeightRow {
+        workout_date_naive: Option<NaiveDateTime>,
+        max_weight_val: Option<i16>, // Assuming MAX(s.Weight) returns SMALLINT
+    }
+
+    let max_weights_raw = sqlx::query_as!(
+        MaxWeightRow,
         r#"
         SELECT w.Start as workout_date_naive, MAX(s.Weight) as max_weight_val
         FROM Workout w
         JOIN Workout_Exercises_Sets wes ON w.WorkoutID = wes.WorkoutID
         JOIN "Set" s ON wes.SetID = s.SetID
-        WHERE wes.ExerciseID = $1 AND s.Weight IS NOT NULL
+        WHERE wes.ExerciseID = $1 AND s.Weight IS NOT NULL -- Expects i16 here based on error E0308
         GROUP BY w.Start
         ORDER BY w.Start
         "#,
-        exercise_id.into_inner() as i32
+        exercise_id.into_inner() // Provides i16
     )
     .fetch_all(pool.get_ref())
     .await;
@@ -297,13 +316,17 @@ async fn get_exercise_max_weight(
             let stats: Vec<ExerciseStats> = results
                 .into_iter()
                 .filter_map(|row| {
-                    let date_naive = row.workout_date_naive;
-                    let max_w = row.max_weight_val?;
-                    let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
-                    Some(ExerciseStats {
-                        date: date_utc,
-                        value: max_w as f64,
-                    })
+                    // Match on the Option fields
+                    match (row.workout_date_naive, row.max_weight_val) {
+                        (Some(date_naive), Some(max_w)) => {
+                            let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
+                            Some(ExerciseStats {
+                                date: date_utc,
+                                value: max_w as f64,
+                            })
+                        }
+                        _ => None, // Skip if date or max_weight is None
+                    }
                 })
                 .collect();
             HttpResponse::Ok().json(stats)
@@ -318,10 +341,22 @@ async fn get_exercise_max_weight(
     }
 }
 
-// Get PRs for an exercise by ID (Unchanged from previous version A)
+// Get PRs for an exercise by ID
 #[get("/exercises/prs/{exercise_id}")]
-async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) -> impl Responder {
-    let prs_raw = sqlx::query!(
+async fn get_exercise_prs(
+    pool: web::Data<PgPool>,
+    exercise_id: web::Path<i16>, // <<<<<<<< CHANGED to i16 based on error E0308
+) -> impl Responder {
+    // Define expected return types, assuming columns in PRs can be NULL
+    struct PrRow {
+        workout_date_naive: Option<NaiveDateTime>,
+        heaviest_weight: Option<i16>,
+        one_rm: Option<f32>,
+        set_volume: Option<i32>,
+    }
+
+    let prs_raw = sqlx::query_as!(
+        PrRow,
         r#"
         SELECT
             w.Start as workout_date_naive,
@@ -330,10 +365,10 @@ async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) 
             p.SetVolume as set_volume
         FROM PRs p
         JOIN Workout w ON p.WorkoutID = w.WorkoutID
-        WHERE p.ExerciseID = $1
+        WHERE p.ExerciseID = $1 -- Expects i16 here based on error E0308
         ORDER BY p.OneRM DESC, p.HeaviestWeight DESC, p.SetVolume DESC
         "#,
-        exercise_id.into_inner() as i32
+        exercise_id.into_inner() // Provides i16
     )
     .fetch_all(pool.get_ref())
     .await;
@@ -343,15 +378,26 @@ async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) 
             let pr_records: Vec<PersonalRecord> = results
                 .into_iter()
                 .filter_map(|row| {
-                    let date_naive = row.workout_date_naive;
-                    let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
-                    Some(PersonalRecord {
-                        workout_date: date_utc,
-                        weight: row.heaviest_weight,
-                        one_rm: row.one_rm,
-                        set_volume: row.set_volume,
-                        reps: 0,
-                    })
+                    // Match on all required Option fields from the row
+                    match (
+                        row.workout_date_naive,
+                        row.heaviest_weight,
+                        row.one_rm,
+                        row.set_volume,
+                    ) {
+                        (Some(date_naive), Some(weight), Some(one_rm), Some(set_volume)) => {
+                            let date_utc = DateTime::from_naive_utc_and_offset(date_naive, Utc);
+                            Some(PersonalRecord {
+                                workout_date: date_utc,
+                                weight,     // Use the unwrapped value
+                                one_rm,     // Use the unwrapped value
+                                set_volume, // Use the unwrapped value
+                                reps: 0,
+                            })
+                        }
+                        // If any of the required fields are None, skip this record
+                        _ => None,
+                    }
                 })
                 .collect();
             HttpResponse::Ok().json(pr_records)
@@ -366,7 +412,7 @@ async fn get_exercise_prs(pool: web::Data<PgPool>, exercise_id: web::Path<i32>) 
     }
 }
 
-// Initialize all routes - Updated
+// Initialize all routes (Unchanged)
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(search_exercises_by_name)
         .service(get_exercise_id_by_name)
