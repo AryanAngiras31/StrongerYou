@@ -107,20 +107,20 @@ export const view_routine = async (routineId: number): Promise<type.RoutineViewR
 // Workouts API
 
 // 1. Get workout template
-export const start_a_new_workout = async (routineId: number): Promise<{ exercises: type.Exercise[] }> => {
-  try {
-    const response = await axios.get<{ exercises: type.Exercise[] }>(`${BASE_URL}/workouts/template/${routineId}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error starting a new workout:', error);
-    throw error;
-  }
-};
+export const start_a_new_workout = async (routineId: number): Promise<type.WorkoutTemplate> => {
+    try {
+      const response = await axios.get<type.WorkoutTemplate>(`<span class="math-inline">\{BASE\_URL\}/workouts/template/</span>{routineId}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error starting a new workout:', error);
+      throw error;
+    }
+  };
 
 // 2. Modify an Existing Workout
 export const modify_workout = async (workoutId: number, workoutData: type.WorkoutData): Promise<{ status: string }> => {

@@ -57,6 +57,10 @@ export interface RoutineCreate {
     routine_id?: number | null; // Assuming Option<i32> serializes to number or null
   }
   
+  export interface WorkoutTemplate {
+    exercises: Exercise[];
+  }
+
   export interface ValidateSetData {
     exercise_id: number;
     weight: number; // Assuming i16 becomes number in JS
