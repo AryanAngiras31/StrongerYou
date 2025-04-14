@@ -239,6 +239,102 @@ async fn main() -> std::io::Result<()> {
     .await
     .expect("Failed to create indexes");
 
+    let exercises = vec![
+        (
+            "Bench Press",
+            vec!["Chest", "Shoulders", "Triceps"],
+            "Regular",
+        ),
+        (
+            "Incline Press (Dumbbell)",
+            vec!["Chest", "Shoulders", "Triceps"],
+            "Single limb",
+        ),
+        (
+            "Incline Press (Smith Machine)",
+            vec!["Chest", "Shoulders", "Triceps"],
+            "Regular",
+        ),
+        (
+            "Flat Press (Dumbbell)",
+            vec!["Chest", "Shoulders", "Triceps"],
+            "Single limb",
+        ),
+        (
+            "Flat Press (Smith Machine)",
+            vec!["Chest", "Shoulders", "Triceps"],
+            "Regular",
+        ),
+        (
+            "Seated Dips",
+            vec!["Chest", "Triceps", "Shoulders"],
+            "Regular",
+        ),
+        ("Standing Cable Chest Fly", vec!["Chest"], "Regular"),
+        (
+            "Barbell Squat",
+            vec!["Quads", "Glutes", "Hamstrings"],
+            "Regular",
+        ),
+        (
+            "Romanian Deadlift",
+            vec!["Hamstrings", "Glutes", "Lower Back"],
+            "Regular",
+        ),
+        (
+            "Leg Press",
+            vec!["Quads", "Glutes", "Hamstrings"],
+            "Regular",
+        ),
+        ("Calf Raises", vec!["Calves"], "Regular"),
+        ("Pull-ups", vec!["Back", "Biceps"], "Regular"),
+        ("Barbell Rows", vec!["Back", "Biceps"], "Regular"),
+        ("Lat Pulldown", vec!["Back", "Biceps"], "Regular"),
+        ("Bicep Curls (Dumbbell)", vec!["Biceps"], "Single limb"),
+        (
+            "Hammer Curls (Dumbbell)",
+            vec!["Biceps", "Forearms"],
+            "Single limb",
+        ),
+        ("Tricep Extensions (Cable)", vec!["Triceps"], "Regular"),
+        (
+            "Overhead Press (Barbell)",
+            vec!["Shoulders", "Triceps"],
+            "Regular",
+        ),
+        (
+            "Lateral Raises (Dumbbell)",
+            vec!["Shoulders"],
+            "Single limb",
+        ),
+        ("Front Raises (Dumbbell)", vec!["Shoulders"], "Single limb"),
+    ];
+
+    for (name, muscles, type_) in exercises {
+        let result = sqlx::query(
+            r#"
+            INSERT INTO ExerciseList (ExerciseName, MusclesTrained, ExerciseType)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (ExerciseName) DO NOTHING
+            "#,
+        )
+        .bind(name)
+        .bind(&muscles)
+        .bind(type_)
+        .execute(&pool)
+        .await;
+
+        match result {
+            Ok(_) => {
+                info!("Successfully inserted exercise: {}", name);
+            }
+            Err(e) => {
+                error!("Failed to insert exercise {}: {}", name, e);
+                return Err(e.into());
+            }
+        }
+    }
+
     // Start HTTP server
     HttpServer::new(move || {
         let cors = Cors::default()
