@@ -1,5 +1,5 @@
 import axios from 'axios';
-
+import * as type from '../services/types';
 const BASE_URL = 'https://localhost:8080';
 
 // Routines API
@@ -25,7 +25,7 @@ export const get_routine_by_name = async (name : string) => {
 };
 
 // 2. Create Routine
-export const create_routine = async (routineData: { name: string, exercises: { exercise_id: number, sets: number }[] }) => {
+export const create_routine = async (routineData: type.RoutineCreate) => {
   try {
       const response = await axios.post(`${BASE_URL}/routines`, routineData, {
           headers: {
@@ -136,7 +136,7 @@ export const modify_workout = async (workoutId: number, workout_data: {routine_i
             }
         });
         return response.data;
-    } catch (error) {
+    } catch (error) {   
         console.error('Error modifying workout:', error);
     }
 }
