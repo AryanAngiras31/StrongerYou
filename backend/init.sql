@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS Routines (
 
 CREATE TABLE IF NOT EXISTS ExerciseList (
     ExerciseID SERIAL PRIMARY KEY,
-    ExerciseName VARCHAR(255) NOT NULL,
+    ExerciseName VARCHAR(255) UNIQUE NOT NULL,
     MusclesTrained TEXT[] NOT NULL,
     ExerciseType VARCHAR(255) NOT NULL
 );

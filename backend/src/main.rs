@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use actix_cors::Cors;
+use actix_web::cookie::time::error;
 use actix_web::middleware::Logger;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use actix_web::{http, middleware};
@@ -69,7 +70,7 @@ async fn main() -> std::io::Result<()> {
         r#"
         CREATE TABLE IF NOT EXISTS ExerciseList (
             ExerciseID SERIAL PRIMARY KEY,
-            ExerciseName VARCHAR(255) NOT NULL,
+            ExerciseName VARCHAR(255) UNIQUE NOT NULL,
             MusclesTrained TEXT[] NOT NULL,
             ExerciseType VARCHAR(255) NOT NULL
         );
@@ -330,7 +331,6 @@ async fn main() -> std::io::Result<()> {
             }
             Err(e) => {
                 error!("Failed to insert exercise {}: {}", name, e);
-                return Err(e.into());
             }
         }
     }
