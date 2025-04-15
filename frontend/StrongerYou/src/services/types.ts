@@ -1,3 +1,5 @@
+// types.ts
+
 // Routines Module
 export interface RoutineCreate {
   name: string;
@@ -105,4 +107,45 @@ export type MetricType = 'average' | 'sum';
 export interface MarkerAnalyticsResponse {
   sum?: number;
   average?: number;
+}
+
+// Exercises Module Types (New additions from exercises.rs)
+export interface ExerciseInput {
+  exercise_name: string;
+  muscles_trained: string[];
+  exercise_type: string;
+}
+
+export interface ExerciseStats {
+  date: string; // Assuming DateTime<Utc> serializes to a string
+  value: number; // Changed from f64 to number for consistency
+}
+
+export interface PersonalRecord {
+  workout_date: string; // Assuming DateTime<Utc> serializes to a string
+  weight: number; // Changed from i16 to number for consistency
+  reps: number;   // Changed from i16 to number for consistency
+  one_rm: number; // Changed from f32 to number for consistency
+  set_volume: number; // Changed from i32 to number for consistency
+}
+
+export interface ExerciseSearchResult {
+  exerciseid: number;
+  exercisename: string;
+  muscles_trained: string[];
+}
+
+export interface ExerciseIdResult {
+  exerciseid: number;
+}
+
+export interface ExerciseDetails {
+  exerciseid: number;
+  exercisename: string;
+  muscles_trained: string[];
+  exercisetype: string;
+}
+
+export interface DeletedExercise {
+  exerciseid: number;
 }

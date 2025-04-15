@@ -201,3 +201,246 @@ export const view_workout = async (workoutId: number): Promise<{ routine_id: num
     throw error;
   }
 };
+
+// Exercises API
+
+// 1. Search for exercises by partial name
+export const search_exercises_by_name = async (partial_name: string): Promise<type.ExerciseSearchResult[]> => {
+  try {
+    const response = await axios.get<type.ExerciseSearchResult[]>(`${BASE_URL}/exercises/search/${partial_name}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error searching exercises by name:', error);
+    throw error;
+  }
+};
+
+// 2. Get exercise ID by exact name
+export const get_exercise_id_by_name = async (exercise_name: string): Promise<{ exerciseid: number } | null> => {
+  try {
+    const response = await axios.get<{ exerciseid: number }>(`${BASE_URL}/exercises/id/${exercise_name}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching exercise ID by name:', error);
+    return null;
+  }
+};
+
+// 3. Create a new exercise
+export const create_exercise = async (exerciseData: type.ExerciseInput): Promise<type.ExerciseDetails> => {
+  try {
+    const response = await axios.post<type.ExerciseDetails>(`${BASE_URL}/exercises`, exerciseData, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error creating exercise:', error);
+    throw error;
+  }
+};
+
+// 4. Delete an exercise by ID
+export const delete_exercise = async (exercise_id: number): Promise<type.DeletedExercise> => {
+  try {
+    const response = await axios.delete<type.DeletedExercise>(`${BASE_URL}/exercises/${exercise_id}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting exercise:', error);
+    throw error;
+  }
+};
+
+// 5. Get set volume history for an exercise by ID
+export const get_exercise_volume = async (exercise_id: number): Promise<type.ExerciseStats[]> => {
+  try {
+    const response = await axios.get<type.ExerciseStats[]>(`${BASE_URL}/exercises/volume/${exercise_id}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching exercise volume:', error);
+    throw error;
+  }
+};
+
+// 6. Get max weight history for an exercise by ID
+export const get_exercise_max_weight = async (exercise_id: number): Promise<type.ExerciseStats[]> => {
+  try {
+    const response = await axios.get<type.ExerciseStats[]>(`${BASE_URL}/exercises/max-weight/${exercise_id}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching exercise max weight:', error);
+    throw error;
+  }
+};
+
+// 7. Get PRs for an exercise by ID
+export const get_exercise_prs = async (exercise_id: number): Promise<type.PersonalRecord[]> => {
+  try {
+    const response = await axios.get<type.PersonalRecord[]>(`${BASE_URL}/exercises/prs/${exercise_id}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching exercise PRs:', error);
+    throw error;
+  }
+};
+
+// Markers API
+
+// 1. Get marker ID by name
+export const get_marker_by_name = async (name: string): Promise<{ marker_id: number } | null> => {
+  try {
+    const response = await axios.get<{ marker_id: number }>(`${BASE_URL}/markers?name=${name}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching marker by name:', error);
+    return null;
+  }
+};
+
+// 2. Create a new marker
+export const create_marker = async (markerData: type.MarkerCreate): Promise<{ marker_id: number }> => {
+  try {
+    const response = await axios.post<{ marker_id: number }>(`${BASE_URL}/markers`, markerData, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error creating marker:', error);
+    throw error;
+  }
+};
+
+// 3. Update a marker
+export const update_marker = async (marker_id: number, markerData: type.MarkerUpdate): Promise<{ status: string }> => {
+  try {
+    const response = await axios.put<{ status: string }>(`${BASE_URL}/markers/${marker_id}`, markerData, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating marker:', error);
+    throw error;
+  }
+};
+
+// 4. Delete a marker
+export const delete_marker = async (marker_id: number): Promise<{ status: string }> => {
+  try {
+    const response = await axios.delete<{ status: string }>(`${BASE_URL}/markers/${marker_id}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting marker:', error);
+    throw error;
+  }
+};
+
+// 5. Log a marker value
+export const log_marker_value = async (marker_id: number, valueData: type.MarkerValue): Promise<{ status: string }> => {
+  try {
+    const response = await axios.post<{ status: string }>(`${BASE_URL}/markers/${marker_id}/logs`, valueData, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error logging marker value:', error);
+    throw error;
+  }
+};
+
+// 6. Get marker analytics
+export const get_marker_analytics = async (
+  marker_id: number,
+  from: string,
+  to: string,
+  metric: type.MetricType
+): Promise<type.MarkerAnalyticsResponse | null> => {
+  try {
+    const response = await axios.get<type.MarkerAnalyticsResponse>(
+      `${BASE_URL}/markers/${marker_id}/analytics?from=${from}&to=${to}&metric=${metric}`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching marker analytics:', error);
+    return null;
+  }
+};
+
+// 7. Get marker timeline
+export const get_marker_timeline = async (
+  marker_id: number,
+  from: string,
+  to: string
+): Promise<type.TimelineEntry[]> => {
+  try {
+    const response = await axios.get<type.TimelineEntry[]>(
+      `${BASE_URL}/markers/${marker_id}/timeline?from=${from}&to=${to}`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching marker timeline:', error);
+    throw error;
+  }
+};
