@@ -6,6 +6,7 @@
   --secondary-text: var(--text-secondary-color);
   --button-color: var(--color-accent);
   --button-text: var(--background-color);
+  --text-dark-color: var(--text-dark-color);
 }
 
 /* Page styles */
@@ -98,7 +99,8 @@ ion-content {
   font-family: var(--font-family);
   font-weight: 600;
   font-size: 0.95rem;
-  letter-spacing: -0.015rem;  /* Add this line to reduce space between letters */
+  letter-spacing: -0.025rem;  
+  color: var(--text-dark-color);
 }
 
 /* Loading state */
