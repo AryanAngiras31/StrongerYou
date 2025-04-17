@@ -18,8 +18,7 @@
 .app-title {
   font-weight: 700;
   font-size: 1.5rem;
-  text-align: left;
-  padding-left: 12px;
+  text-align: center;
   font-family: var(--font-family);
 }
 
@@ -34,7 +33,7 @@ ion-content {
   font-weight: 700;
   margin: 20px 0 24px 12px;
   color: var(--ion-text-color);
-  font-family: var(--ion-font-family);
+  font-family: var(--font-family);
 }
 
 /* Routine cards */
@@ -81,7 +80,7 @@ ion-content {
 }
 
 .start-button {
-  --background: var(--color-accent);
+  --background: var(--color-accent);  
   --color: var(--background-color);
   --border-radius: 8px;
   --box-shadow: none;
@@ -90,6 +89,12 @@ ion-content {
   text-transform: none;
   height: 44px;
   font-family: var(--font-family);
+}
+
+.start-text{
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
 /* Loading state */
