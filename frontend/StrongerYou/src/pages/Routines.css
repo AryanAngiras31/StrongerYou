@@ -3,7 +3,7 @@
   --app-background: var(--background-color);
   --card-background: var(--color-primary);
   --primary-text: var(--text-color);
-  --secondary-text: var(--color-secondary);
+  --secondary-text: var(--text-secondary-color);
   --button-color: var(--color-accent);
   --button-text: var(--background-color);
 }
@@ -30,8 +30,8 @@ ion-content {
 }
 
 .routines-title {
-  font-size: 1.4rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
   margin: 20px 0 24px 12px;
   color: var(--ion-text-color);
   font-family: var(--ion-font-family);
@@ -68,7 +68,7 @@ ion-content {
 }
 
 .routine-last-performed {
-  color: var(--color-secondary);
+  color: var(--text-secondary-color);
   font-size: 0.9rem;
   margin-bottom: 16px;
 }

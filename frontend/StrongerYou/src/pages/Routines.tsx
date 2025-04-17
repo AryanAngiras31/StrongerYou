@@ -45,21 +45,7 @@ const RoutinesPage: React.FC = () => {
         
         {loading && <p className="loading-text">Loading your routines...</p>}
         
-        {error && (
-          <div className="error-container">
-            <p className="error-text">{error}</p>
-            <p className="error-details">{detailedError}</p>
-            <IonButton 
-              className="debug-button" 
-              size="small" 
-              onClick={() => console.log('Open console to see detailed error logs')}
-            >
-              View Debug Logs
-            </IonButton>
-          </div>
-        )}
-        
-        {!loading && !error && (
+        {!loading && (
           <div className="routines-container">
             {routines.length === 0 ? (
               <div className="no-routines-container">
@@ -101,18 +87,6 @@ const RoutinesPage: React.FC = () => {
           </div>
         </div>
       </IonContent>
-      
-      <IonToast
-        isOpen={showToast}
-        onDidDismiss={() => setShowToast(false)}
-        message={detailedError}
-        duration={10000}
-        position="bottom"
-        buttons={[{
-          text: 'Dismiss',
-          role: 'cancel'
-        }]}
-      />
     </IonPage>
   );
 };
