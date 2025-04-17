@@ -68,7 +68,7 @@ const RoutinesPage: React.FC = () => {
                   </div>
                   <IonButton expand="block" className="start-button">
                     <div className="start-text">
-                      Start
+                      START
                     </div>
                   </IonButton>
                 </div>

@@ -62,6 +62,7 @@ ion-content {
 }
 
 .routine-title {
+  font-family: var(--font-family);
   font-weight: 600;
   font-size: 1.2rem;
   color: var(--text-color);
@@ -93,10 +94,11 @@ ion-content {
   font-family: var(--font-family);
 }
 
-.start-text{
+.start-text {
   font-family: var(--font-family);
   font-weight: 600;
   font-size: 0.95rem;
+  letter-spacing: -0.015rem;  /* Add this line to reduce space between letters */
 }
 
 /* Loading state */
