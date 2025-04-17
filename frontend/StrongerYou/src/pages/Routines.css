@@ -74,10 +74,11 @@ ion-content {
 }
 
 .more-options {
-  color: var(--color-secondary);
+  color: var(--text-secondary-color);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.3rem; /* Add this line to make the icon larger */
 }
 
 .start-button {
