@@ -1,19 +1,19 @@
 :root {
     /* Color Variables */
-    --ion-background-color: #121212;
-    --ion-text-color: #fafafa;
-    --ion-color-primary: #2e3435;
-    --ion-color-secondary: #3d3d3d;
-    --ion-color-accent: #acddf4;
-    --ion-color-error: #ac3b3d;
+    --background-color: #121212;
+    --text-color: #fafafa;
+    --color-primary: #2e3435;
+    --color-secondary: #3d3d3d;
+    --color-accent: #acddf4;
+    --color-error: #ac3b3d;
   
     /* Font Variables */
-    --ion-font-family: 'Poppins', sans-serif;
+    --font-family: 'Poppins', sans-serif;
   }
   
   /* Apply the font family to the body */
   body {
-    font-family: var(--ion-font-family);
+    font-family: var(--font-family);
   }
   
   /* Heading styles */
