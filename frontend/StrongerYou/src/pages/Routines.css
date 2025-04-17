@@ -16,8 +16,9 @@
 }
 
 .app-title {
+  color: var(--ion-text-color);
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: 1.60rem;
   text-align: center;
   font-family: var(--font-family);
 }
@@ -29,9 +30,9 @@ ion-content {
 }
 
 .routines-title {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  margin: 20px 0 24px 12px;
+  margin: 0px 0 15px 11px;
   color: var(--ion-text-color);
   font-family: var(--font-family);
 }
@@ -73,7 +74,7 @@ ion-content {
 }
 
 .more-options {
-  color: var(--color-secondary);
+  color: var(--text-secondary-color);
   display: flex;
   align-items: center;
   justify-content: center;
